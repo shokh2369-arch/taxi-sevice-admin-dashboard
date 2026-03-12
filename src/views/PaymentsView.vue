@@ -6,22 +6,22 @@
     <table class="table" v-else-if="payments.length">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Driver</th>
-          <th>Amount</th>
-          <th>Type</th>
+          <th class="text-center">ID</th>
+          <th class="text-center">Driver</th>
+          <th class="text-right">Amount</th>
+          <th class="text-center">Type</th>
           <th>Note</th>
-          <th>Created</th>
+          <th class="text-right">Created</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="p in payments" :key="p.id">
-          <td>{{ p.id }}</td>
-          <td>{{ p.driver_id }}</td>
-          <td>{{ formatMoney(p.amount) }}</td>
-          <td>{{ p.type }}</td>
+          <td class="text-center">{{ p.id }}</td>
+          <td class="text-center">{{ p.driver_id }}</td>
+          <td class="text-right">{{ formatMoney(p.amount) }}</td>
+          <td class="text-center">{{ p.type }}</td>
           <td>{{ p.note }}</td>
-          <td>{{ new Date(p.created_at).toLocaleString() }}</td>
+          <td class="text-right">{{ new Date(p.created_at).toLocaleString() }}</td>
         </tr>
       </tbody>
     </table>

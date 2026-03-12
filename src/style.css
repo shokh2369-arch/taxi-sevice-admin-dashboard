@@ -58,6 +58,18 @@ a {
   font-size: 0.85rem;
 }
 
+.table th {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
 .badge {
   display: inline-block;
   padding: 0.15rem 0.4rem;
