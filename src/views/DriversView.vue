@@ -81,8 +81,9 @@ async function load() {
   }
 }
 
-function formatMoney(cents) {
-  return '$' + (cents / 100).toFixed(2);
+function formatMoney(amount) {
+  if (amount == null) return "0 so'm";
+  return new Intl.NumberFormat('uz-UZ').format(amount) + " so'm";
 }
 
 function goToDriver(id) {
@@ -92,10 +93,10 @@ function goToDriver(id) {
 async function submitTopup(id) {
   const amount = topups.value[id];
   if (!amount || amount <= 0) return;
-  const cents = Math.round(amount * 100);
+  const value = Math.round(amount);
   try {
     await apiPost(`/admin/drivers/${id}/add-balance`, {
-      amount: cents,
+      amount: value,
       note: 'Admin topup'
     });
     topups.value[id] = null;

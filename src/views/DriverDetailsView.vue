@@ -25,7 +25,7 @@
         v-model.number="amount"
         type="number"
         class="input"
-        placeholder="Amount (USD)"
+        placeholder="Amount (so'm)"
       />
       <input
         v-model="note"
@@ -100,16 +100,17 @@ async function load() {
   }
 }
 
-function formatMoney(cents) {
-  return '$' + (cents / 100).toFixed(2);
+function formatMoney(amount) {
+  if (amount == null) return "0 so'm";
+  return new Intl.NumberFormat('uz-UZ').format(amount) + " so'm";
 }
 
 async function add() {
   if (!amount.value || amount.value <= 0) return;
-  const cents = Math.round(amount.value * 100);
+  const value = Math.round(amount.value);
   try {
     await apiPost(`/admin/drivers/${id}/add-balance`, {
-      amount: cents,
+      amount: value,
       note: note.value || 'Admin topup'
     });
     amount.value = null;

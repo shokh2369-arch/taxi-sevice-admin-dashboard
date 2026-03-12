@@ -51,8 +51,9 @@ async function load() {
   }
 }
 
-const formatMoney = (cents) => {
-  return '$' + (cents / 100).toFixed(2);
+const formatMoney = (amount) => {
+  if (amount == null) return '0 so\'m';
+  return new Intl.NumberFormat('uz-UZ').format(amount) + " so'm";
 };
 </script>
 
