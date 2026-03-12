@@ -8,20 +8,20 @@
         <tr>
           <th class="text-center">ID</th>
           <th class="text-center">Driver</th>
-          <th class="text-right">Amount</th>
+          <th class="text-center">Amount</th>
           <th class="text-center">Type</th>
           <th>Note</th>
-          <th class="text-right">Created</th>
+          <th class="text-center">Created</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="p in payments" :key="p.id">
           <td class="text-center">{{ p.id }}</td>
           <td class="text-center">{{ p.driver_id }}</td>
-          <td class="text-right">{{ formatMoney(p.amount) }}</td>
+          <td class="text-center">{{ formatMoney(p.amount) }}</td>
           <td class="text-center">{{ p.type }}</td>
           <td>{{ p.note }}</td>
-          <td class="text-right">{{ new Date(p.created_at).toLocaleString() }}</td>
+          <td class="text-center">{{ new Date(p.created_at).toLocaleString() }}</td>
         </tr>
       </tbody>
     </table>
