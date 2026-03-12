@@ -25,7 +25,6 @@
         <strong>{{ summary.todays_trips }}</strong>
       </div>
     </div>
-    <p v-else>Loading...</p>
   </div>
 </template>
 
