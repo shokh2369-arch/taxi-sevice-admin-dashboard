@@ -70,6 +70,10 @@ a {
   text-align: right;
 }
 
+.text-left {
+  text-align: left;
+}
+
 .badge {
   display: inline-block;
   padding: 0.15rem 0.4rem;
