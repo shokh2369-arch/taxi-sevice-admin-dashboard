@@ -8,7 +8,7 @@
         <tr>
           <th class="text-center">ID</th>
           <th class="text-center">Driver</th>
-          <th class="text-right">Amount</th>
+          <th class="text-center">Amount</th>
           <th class="text-center">Type</th>
           <th class="text-left">Note</th>
           <th class="text-center">Created</th>
@@ -23,7 +23,7 @@
               {{ p.driver_phone }}
             </div>
           </td>
-          <td class="text-right">{{ formatMoney(p.amount) }}</td>
+          <td class="text-center">{{ formatMoney(p.amount) }}</td>
           <td class="text-center">{{ p.type }}</td>
           <td class="text-left">{{ p.note }}</td>
           <td class="text-center">{{ new Date(p.created_at).toLocaleString() }}</td>
