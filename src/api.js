@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'https://taxi-service-on-telegram.onrender.com';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://taxi-service-on-telegram.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE
