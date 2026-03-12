@@ -7,7 +7,7 @@
       <thead>
         <tr>
           <th class="text-right">ID</th>
-          <th class="text-right">Driver</th>
+          <th>Driver</th>
           <th class="text-right">Amount</th>
           <th class="text-center">Type</th>
           <th>Note</th>
@@ -17,7 +17,12 @@
       <tbody>
         <tr v-for="p in payments" :key="p.id">
           <td class="text-right">{{ p.id }}</td>
-          <td class="text-right">{{ p.driver_id }}</td>
+          <td>
+            <div>{{ formatDriver(p) }}</div>
+            <div v-if="p.driver_name && p.driver_phone" style="font-size: 0.8rem; color: #6b7280;">
+              {{ p.driver_phone }}
+            </div>
+          </td>
           <td class="text-right">{{ formatMoney(p.amount) }}</td>
           <td class="text-center">{{ p.type }}</td>
           <td>{{ p.note }}</td>
@@ -55,6 +60,16 @@ async function load() {
 function formatMoney(amount) {
   if (amount == null) return "0 so'm";
   return new Intl.NumberFormat('uz-UZ').format(amount) + " so'm";
+}
+
+function formatDriver(p) {
+  if (p.driver_name && p.driver_name.trim()) {
+    return p.driver_name;
+  }
+  if (p.driver_phone && p.driver_phone.trim()) {
+    return p.driver_phone;
+  }
+  return 'Unknown driver';
 }
 </script>
 
