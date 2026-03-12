@@ -1,7 +1,9 @@
 <template>
   <div>
     <h1>Dashboard</h1>
-    <div class="card-grid" v-if="summary">
+    <div v-if="loading">Loading...</div>
+    <div v-else-if="error" style="color: red;">{{ error }}</div>
+    <div class="card-grid" v-else>
       <div class="card">
         <div>Total drivers</div>
         <strong>{{ summary.total_drivers }}</strong>
@@ -29,18 +31,26 @@
 
 <script setup>
 import { onMounted, ref } from 'vue';
-import api from '../api';
+import { apiGet } from '../api';
 
 const summary = ref(null);
+const loading = ref(true);
+const error = ref('');
 
-onMounted(async () => {
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = '';
   try {
-    const { data } = await api.getDashboard();
-    summary.value = data;
+    summary.value = await apiGet('/admin/dashboard');
   } catch (e) {
     console.error(e);
+    error.value = e instanceof Error ? e.message : 'Failed to load dashboard';
+  } finally {
+    loading.value = false;
   }
-});
+}
 
 const formatMoney = (cents) => {
   return '$' + (cents / 100).toFixed(2);

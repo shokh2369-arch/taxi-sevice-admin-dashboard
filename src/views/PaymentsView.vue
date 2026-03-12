@@ -1,7 +1,9 @@
 <template>
   <div>
     <h1>Payments</h1>
-    <table class="table" v-if="payments.length">
+    <div v-if="loading">Loading...</div>
+    <div v-else-if="error" style="color: red;">{{ error }}</div>
+    <table class="table" v-else-if="payments.length">
       <thead>
         <tr>
           <th>ID</th>
@@ -29,18 +31,26 @@
 
 <script setup>
 import { onMounted, ref } from 'vue';
-import api from '../api';
+import { apiGet } from '../api';
 
 const payments = ref([]);
+const loading = ref(true);
+const error = ref('');
 
-onMounted(async () => {
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = '';
   try {
-    const { data } = await api.getPayments();
-    payments.value = data;
+    payments.value = await apiGet('/admin/payments');
   } catch (e) {
     console.error(e);
+    error.value = e instanceof Error ? e.message : 'Failed to load payments';
+  } finally {
+    loading.value = false;
   }
-});
+}
 
 function formatMoney(cents) {
   return '$' + (cents / 100).toFixed(2);

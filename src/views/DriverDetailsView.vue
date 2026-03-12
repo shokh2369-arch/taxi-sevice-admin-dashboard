@@ -1,5 +1,8 @@
 <template>
-  <div v-if="driver">
+  <div>
+    <div v-if="loading">Loading...</div>
+    <div v-else-if="error" style="color: red;">{{ error }}</div>
+    <div v-else-if="driver">
     <h1>Driver #{{ driver.driver_id }}</h1>
     <div class="card">
       <p><strong>Name:</strong> {{ driver.name }}</p>
@@ -58,14 +61,14 @@
       </tbody>
     </table>
     <p v-else>No payments yet.</p>
+    </div>
   </div>
-  <p v-else>Loading...</p>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import api from '../api';
+import { apiGet, apiPost } from '../api';
 
 const route = useRoute();
 const id = Number(route.params.id);
@@ -74,20 +77,26 @@ const driver = ref(null);
 const payments = ref([]);
 const amount = ref(null);
 const note = ref('');
+const loading = ref(true);
+const error = ref('');
 
 onMounted(async () => {
   await load();
 });
 
 async function load() {
+  loading.value = true;
+  error.value = '';
   try {
-    const { data } = await api.getDrivers();
-    driver.value = data.find((d) => d.driver_id === id) || null;
+    const drivers = await apiGet('/admin/drivers');
+    driver.value = drivers.find((d) => d.driver_id === id) || null;
 
-    const res = await api.getPayments({ driver_id: id });
-    payments.value = res.data;
+    payments.value = await apiGet(`/admin/payments?driver_id=${id}`);
   } catch (e) {
     console.error(e);
+    error.value = e instanceof Error ? e.message : 'Failed to load driver details';
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -99,7 +108,10 @@ async function add() {
   if (!amount.value || amount.value <= 0) return;
   const cents = Math.round(amount.value * 100);
   try {
-    await api.addBalance(id, cents, note.value || 'Admin topup');
+    await apiPost(`/admin/drivers/${id}/add-balance`, {
+      amount: cents,
+      note: note.value || 'Admin topup'
+    });
     amount.value = null;
     note.value = '';
     await load();
