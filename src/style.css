@@ -56,6 +56,7 @@ a {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid #e5e7eb;
   font-size: 0.85rem;
+  vertical-align: middle;
 }
 
 .table th {
