@@ -44,7 +44,7 @@
       <thead>
         <tr>
           <th>ID</th>
-          <th>Fare Price</th>
+          <th>Total Price</th>
           <th>Amount</th>
           <th>Type</th>
           <th>Note</th>
@@ -54,7 +54,7 @@
       <tbody>
         <tr v-for="p in payments" :key="p.id">
           <td>{{ p.id }}</td>
-          <td>{{ formatMoney(getFareTotal(p)) }}</td>
+          <td>{{ formatTotalPrice(p) }}</td>
           <td>{{ formatMoney(p.amount) }}</td>
           <td>{{ p.type }}</td>
           <td>{{ p.note }}</td>
@@ -107,14 +107,19 @@ function formatMoney(amount) {
   return new Intl.NumberFormat('uz-UZ').format(amount) + " so'm";
 }
 
-/** Starting fee + fare price (supports snake_case, camelCase, nested trip, or single total_fare). */
-function getFareTotal(p) {
+/** Total price: starting_fee + fare_price, or total_price / total_fare from API. */
+function getTotalPrice(p) {
   const start = p?.starting_fee ?? p?.startingFee ?? p?.trip?.starting_fee ?? p?.trip?.startingFee ?? 0;
   const fare = p?.fare_price ?? p?.farePrice ?? p?.fair_price ?? p?.fairPrice ?? p?.trip?.fare_price ?? p?.trip?.farePrice ?? 0;
   const sum = (Number(start) || 0) + (Number(fare) || 0);
   if (sum > 0) return sum;
-  const total = p?.total_fare ?? p?.totalFare ?? p?.fare_total ?? p?.fareTotal ?? p?.trip?.total_fare ?? p?.trip?.totalFare ?? 0;
+  const total = p?.total_price ?? p?.totalPrice ?? p?.total_fare ?? p?.totalFare ?? p?.fare_total ?? p?.fareTotal ?? p?.trip?.total_price ?? p?.trip?.totalPrice ?? p?.trip?.total_fare ?? p?.trip?.totalFare ?? 0;
   return Number(total) || 0;
+}
+
+function formatTotalPrice(p) {
+  const total = getTotalPrice(p);
+  return total > 0 ? formatMoney(total) : '—';
 }
 
 async function add() {
