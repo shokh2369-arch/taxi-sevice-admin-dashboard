@@ -19,6 +19,27 @@
       </p>
     </div>
 
+    <h2 style="margin-top: 1.5rem">Monthly totals</h2>
+    <div class="card" v-if="monthlyTotals.length">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Monthly total price</th>
+            <th>Monthly total amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in monthlyTotals" :key="row.monthKey">
+            <td>{{ row.monthLabel }}</td>
+            <td>{{ formatMoney(row.totalPrice) }}</td>
+            <td>{{ formatMoney(row.totalAmount) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p v-else class="card">No payments yet.</p>
+
     <h2 style="margin-top: 1.5rem">Add balance</h2>
     <div class="card">
       <input
@@ -68,7 +89,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { apiGet, apiPost } from '../api';
 
@@ -121,6 +142,30 @@ function formatTotalPrice(p) {
   const total = getTotalPrice(p);
   return total > 0 ? formatMoney(total) : '—';
 }
+
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const monthlyTotals = computed(() => {
+  const byMonth = new Map();
+  for (const p of payments.value) {
+    const d = new Date(p.created_at);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!byMonth.has(monthKey)) {
+      byMonth.set(monthKey, { totalPrice: 0, totalAmount: 0, year: d.getFullYear(), month: d.getMonth() });
+    }
+    const row = byMonth.get(monthKey);
+    row.totalPrice += getTotalPrice(p);
+    row.totalAmount += Number(p?.amount) || 0;
+  }
+  return Array.from(byMonth.entries())
+    .map(([monthKey, row]) => ({
+      monthKey,
+      monthLabel: `${monthNames[row.month]} ${row.year}`,
+      totalPrice: row.totalPrice,
+      totalAmount: row.totalAmount
+    }))
+    .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+});
 
 async function add() {
   if (!amount.value || amount.value <= 0) return;
