@@ -44,7 +44,7 @@
       <thead>
         <tr>
           <th>ID</th>
-          <th>Total Price</th>
+          <th>Fare price</th>
           <th>Amount</th>
           <th>Type</th>
           <th>Note</th>
