@@ -155,7 +155,9 @@ const monthlyTotals = computed(() => {
     }
     const row = byMonth.get(monthKey);
     row.totalPrice += getTotalPrice(p);
-    row.totalAmount += Number(p?.amount) || 0;
+    if (p?.type === 'commission') {
+      row.totalAmount += Number(p?.amount) || 0;
+    }
   }
   return Array.from(byMonth.entries())
     .map(([monthKey, row]) => ({

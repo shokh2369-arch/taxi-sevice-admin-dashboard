@@ -3,7 +3,17 @@
     <h1>Drivers</h1>
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
-    <table class="table" v-else-if="drivers.length">
+    <template v-else>
+      <div style="margin-bottom: 1rem;">
+        <input
+          v-model.trim="phoneSearch"
+          type="text"
+          class="input"
+          placeholder="Search by phone number"
+          style="max-width: 280px;"
+        />
+      </div>
+      <table class="table" v-if="filteredDrivers.length">
       <thead>
         <tr>
           <th>ID</th>
@@ -19,7 +29,7 @@
       </thead>
       <tbody>
         <tr
-          v-for="d in drivers"
+          v-for="d in filteredDrivers"
           :key="d.driver_id"
           @click="goToDriver(d.driver_id)"
           style="cursor: pointer"
@@ -51,20 +61,29 @@
         </tr>
       </tbody>
     </table>
-    <p v-else>Loading...</p>
+    <p v-else>{{ phoneSearch ? 'No drivers match this phone number.' : 'No drivers.' }}</p>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiGet, apiPost } from '../api';
 
 const router = useRouter();
 const drivers = ref([]);
+const phoneSearch = ref('');
 const topups = ref({});
 const loading = ref(true);
 const error = ref('');
+
+const filteredDrivers = computed(() => {
+  const q = phoneSearch.value;
+  if (!q) return drivers.value;
+  const lower = q.toLowerCase();
+  return drivers.value.filter((d) => (d.phone || '').toLowerCase().includes(lower));
+});
 
 onMounted(load);
 
