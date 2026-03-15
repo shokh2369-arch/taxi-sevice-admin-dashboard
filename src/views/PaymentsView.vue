@@ -8,6 +8,7 @@
         <tr>
           <th>ID</th>
           <th>Driver</th>
+          <th>Fair Price</th>
           <th>Amount</th>
           <th>Type</th>
           <th>Note</th>
@@ -23,6 +24,7 @@
               {{ p.driver_phone }}
             </div>
           </td>
+          <td>{{ formatMoney(p.fair_price) }}</td>
           <td>{{ formatMoney(p.amount) }}</td>
           <td>{{ p.type }}</td>
           <td>{{ p.note }}</td>

@@ -44,6 +44,7 @@
       <thead>
         <tr>
           <th>ID</th>
+          <th>Fare Price</th>
           <th>Amount</th>
           <th>Type</th>
           <th>Note</th>
@@ -53,6 +54,7 @@
       <tbody>
         <tr v-for="p in payments" :key="p.id">
           <td>{{ p.id }}</td>
+          <td>{{ formatMoney(p.fare_price ?? p.fair_price) }}</td>
           <td>{{ formatMoney(p.amount) }}</td>
           <td>{{ p.type }}</td>
           <td>{{ p.note }}</td>
