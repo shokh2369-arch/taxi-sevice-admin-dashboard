@@ -1,7 +1,7 @@
 const API_BASE =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
   (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) ||
-  'https://taxi-service-on-telegram.onrender.com';
+  'https://github.com/shohjaxonabbdullayev-jpg/taxi';
 
 export async function apiGet(path) {
   const res = await fetch(`${API_BASE}${path}`);
