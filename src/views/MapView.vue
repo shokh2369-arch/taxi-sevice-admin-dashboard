@@ -233,7 +233,7 @@ async function refreshData() {
     renderMarkers(drivers, requests);
 
     if (!requests.length) {
-      requestWarning.value = 'Ride request endpoints not found or returned no data.';
+      requestWarning.value = 'No active ride requests right now.';
     }
 
     if (drivers.length || requests.length) {
