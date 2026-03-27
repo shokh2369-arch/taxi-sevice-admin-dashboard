@@ -132,14 +132,22 @@ async function submitTopup(id) {
 
 function normalizeDriver(d, idx) {
   const driverId = d?.driver_id ?? d?.id ?? d?.driverId ?? null;
-  const statusRaw = d?.status ?? d?.state ?? d?.driver_status ?? d?.is_active;
+  const statusRaw =
+    d?.active_status ??
+    d?.is_active ??
+    d?.is_online ??
+    d?.status ??
+    d?.state ??
+    d?.driver_status ??
+    d?.application_app_status ??
+    d?.application_status;
   const status = normalizeStatus(statusRaw);
   return {
     ...d,
     driver_id: driverId,
     phone: d?.phone ?? d?.driver_phone ?? d?.phone_number ?? '',
-    car_model: d?.car_model ?? d?.car ?? d?.carName ?? d?.car_name ?? '',
-    plate_number: d?.plate_number ?? d?.plate ?? d?.plateNo ?? '',
+    car_model: d?.car_model ?? d?.car_type_model ?? d?.car ?? d?.carName ?? d?.car_name ?? '',
+    plate_number: d?.plate_number ?? d?.plate_text ?? d?.plate ?? d?.plateNo ?? '',
     balance: Number(d?.balance ?? d?.driver_balance ?? 0) || 0,
     total_paid: Number(d?.total_paid ?? d?.totalPaid ?? d?.paid_total ?? 0) || 0,
     status,
@@ -152,6 +160,8 @@ function normalizeStatus(v) {
   if (typeof v === 'boolean') return v ? 'ACTIVE' : 'INACTIVE';
   const s = String(v ?? '').trim().toUpperCase();
   if (!s) return 'UNKNOWN';
+  if (['1', 'TRUE', 'YES'].includes(s)) return 'ACTIVE';
+  if (['0', 'FALSE', 'NO'].includes(s)) return 'INACTIVE';
   if (['ACTIVE', 'ONLINE', 'APPROVED'].includes(s)) return 'ACTIVE';
   if (['PENDING', 'WAITING', 'WAITING_APPROVAL'].includes(s)) return 'PENDING';
   if (['BLOCKED', 'BANNED'].includes(s)) return 'BLOCKED';
