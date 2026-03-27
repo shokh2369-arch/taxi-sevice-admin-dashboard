@@ -3,6 +3,9 @@
     <h1>Live Map</h1>
     <p style="margin-top: -0.25rem; color: #4b5563; font-size: 0.9rem;">
       Auto refresh every {{ pollSeconds }}s
+      <span v-if="!useGoogleMaps" style="display: block; margin-top: 0.25rem; font-size: 0.8rem;">
+        Using OpenStreetMap. Set <code style="font-size: inherit;">VITE_GOOGLE_MAPS_API_KEY</code> for Google Maps.
+      </span>
     </p>
 
     <div class="map-legend" style="margin: 0.75rem 0 1rem;">
@@ -72,15 +75,24 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet } from '../api';
 
 const mapEl = ref(null);
-const map = ref(null);
+const leafletMap = ref(null);
 const driverLayer = ref(null);
 const requestLayer = ref(null);
+
+const GOOGLE_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
+const useGoogleMaps = computed(() => Boolean(GOOGLE_KEY));
+
+let googleMap = null;
+let googleInfoWindow = null;
+const googleDriverMarkers = [];
+const googleRequestMarkers = [];
+
 const pollMs = 7000;
 const pollSeconds = Math.floor(pollMs / 1000);
 const error = ref('');
@@ -88,6 +100,7 @@ const selectedItem = ref(null);
 const nearestList = ref([]);
 let pollTimer = null;
 const requestWarning = ref('');
+let googleInitFitted = false;
 
 const DRIVER_ENDPOINTS = (
   import.meta.env.VITE_MAP_DRIVER_ENDPOINTS ||
@@ -111,7 +124,7 @@ function pickLatLng(row) {
   return [lat, lng];
 }
 
-function markerIcon(color) {
+function markerIconLeaflet(color) {
   return L.divIcon({
     className: '',
     html: `<div style="width:14px;height:14px;border-radius:999px;background:${color};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25);"></div>`,
@@ -174,12 +187,23 @@ function normalizeRequests(raw) {
   }).filter((r) => r.latlng);
 }
 
-function renderMarkers(drivers, requests) {
+function googleCircleIcon(color) {
+  return {
+    path: google.maps.SymbolPath.CIRCLE,
+    scale: 7,
+    fillColor: color,
+    fillOpacity: 1,
+    strokeColor: '#ffffff',
+    strokeWeight: 2
+  };
+}
+
+function renderMarkersLeaflet(drivers, requests) {
   driverLayer.value.clearLayers();
   requestLayer.value.clearLayers();
 
   drivers.forEach((d) => {
-    const m = L.marker(d.latlng, { icon: markerIcon(driverStatusColor(d)) });
+    const m = L.marker(d.latlng, { icon: markerIconLeaflet(driverStatusColor(d)) });
     m.bindPopup(`
       <div>
         <strong>Driver #${d.driver_id ?? 'N/A'}</strong><br/>
@@ -200,7 +224,7 @@ function renderMarkers(drivers, requests) {
   });
 
   requests.forEach((r) => {
-    const m = L.marker(r.latlng, { icon: markerIcon('#2563eb') });
+    const m = L.marker(r.latlng, { icon: markerIconLeaflet('#2563eb') });
     m.bindPopup(`
       <div>
         <strong>Request #${r.request_id ?? 'N/A'}</strong><br/>
@@ -219,6 +243,92 @@ function renderMarkers(drivers, requests) {
     });
     m.addTo(requestLayer.value);
   });
+
+  if (drivers.length || requests.length) {
+    const group = L.featureGroup([...driverLayer.value.getLayers(), ...requestLayer.value.getLayers()]);
+    if (group.getLayers().length && !leafletMap.value._initFitted) {
+      leafletMap.value.fitBounds(group.getBounds().pad(0.2));
+      leafletMap.value._initFitted = true;
+    }
+  }
+}
+
+function renderMarkersGoogle(drivers, requests) {
+  googleDriverMarkers.forEach((m) => m.setMap(null));
+  googleDriverMarkers.length = 0;
+  googleRequestMarkers.forEach((m) => m.setMap(null));
+  googleRequestMarkers.length = 0;
+
+  drivers.forEach((d) => {
+    const color = driverStatusColor(d);
+    const marker = new google.maps.Marker({
+      position: { lat: d.latlng[0], lng: d.latlng[1] },
+      map: googleMap,
+      icon: googleCircleIcon(color),
+      title: `Driver #${d.driver_id ?? 'N/A'}`
+    });
+    marker.addListener('click', () => {
+      googleInfoWindow.setContent(`
+        <div>
+          <strong>Driver #${d.driver_id ?? 'N/A'}</strong><br/>
+          Phone: ${d.phone || 'N/A'}
+        </div>
+      `);
+      googleInfoWindow.open({ map: googleMap, anchor: marker });
+      selectedItem.value = {
+        type: 'driver',
+        id: d.driver_id ?? 'N/A',
+        phone: d.phone,
+        latlng: d.latlng,
+        raw: d
+      };
+      nearestList.value = [];
+    });
+    googleDriverMarkers.push(marker);
+  });
+
+  requests.forEach((r) => {
+    const marker = new google.maps.Marker({
+      position: { lat: r.latlng[0], lng: r.latlng[1] },
+      map: googleMap,
+      icon: googleCircleIcon('#2563eb'),
+      title: `Request #${r.request_id ?? 'N/A'}`
+    });
+    marker.addListener('click', () => {
+      googleInfoWindow.setContent(`
+        <div>
+          <strong>Request #${r.request_id ?? 'N/A'}</strong><br/>
+          Phone: ${r.phone || 'N/A'}
+        </div>
+      `);
+      googleInfoWindow.open({ map: googleMap, anchor: marker });
+      selectedItem.value = {
+        type: 'request',
+        id: r.request_id ?? 'N/A',
+        phone: r.phone,
+        latlng: r.latlng,
+        raw: r
+      };
+      nearestList.value = [];
+    });
+    googleRequestMarkers.push(marker);
+  });
+
+  if (!googleInitFitted && (drivers.length || requests.length)) {
+    const bounds = new google.maps.LatLngBounds();
+    drivers.forEach((d) => bounds.extend({ lat: d.latlng[0], lng: d.latlng[1] }));
+    requests.forEach((r) => bounds.extend({ lat: r.latlng[0], lng: r.latlng[1] }));
+    googleMap.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+    googleInitFitted = true;
+  }
+}
+
+function renderMarkers(drivers, requests) {
+  if (googleMap) {
+    renderMarkersGoogle(drivers, requests);
+  } else if (leafletMap.value && driverLayer.value && requestLayer.value) {
+    renderMarkersLeaflet(drivers, requests);
+  }
 }
 
 async function refreshData() {
@@ -234,14 +344,6 @@ async function refreshData() {
 
     if (!requests.length) {
       requestWarning.value = 'No active ride requests right now.';
-    }
-
-    if (drivers.length || requests.length) {
-      const group = L.featureGroup([...driverLayer.value.getLayers(), ...requestLayer.value.getLayers()]);
-      if (group.getLayers().length && !map.value._initFitted) {
-        map.value.fitBounds(group.getBounds().pad(0.2));
-        map.value._initFitted = true;
-      }
     }
   } catch (e) {
     console.error(e);
@@ -295,26 +397,58 @@ function callNumber(phone) {
   window.location.href = `tel:${phone}`;
 }
 
+async function initGoogleMaps() {
+  const { Loader } = await import('@googlemaps/js-api-loader');
+  const loader = new Loader({
+    apiKey: GOOGLE_KEY,
+    version: 'weekly'
+  });
+  await loader.load();
+  googleMap = new google.maps.Map(mapEl.value, {
+    center: { lat: 41.3111, lng: 69.2797 },
+    zoom: 12,
+    mapTypeControl: true,
+    streetViewControl: false,
+    fullscreenControl: true
+  });
+  googleInfoWindow = new google.maps.InfoWindow();
+}
+
 onMounted(async () => {
-  map.value = L.map(mapEl.value).setView([41.3111, 69.2797], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map.value);
+  try {
+    if (GOOGLE_KEY) {
+      await initGoogleMaps();
+    } else {
+      leafletMap.value = L.map(mapEl.value).setView([41.3111, 69.2797], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(leafletMap.value);
 
-  driverLayer.value = L.layerGroup().addTo(map.value);
-  requestLayer.value = L.layerGroup().addTo(map.value);
+      driverLayer.value = L.layerGroup().addTo(leafletMap.value);
+      requestLayer.value = L.layerGroup().addTo(leafletMap.value);
+    }
 
-  await refreshData();
-  pollTimer = setInterval(refreshData, pollMs);
+    await refreshData();
+    pollTimer = setInterval(refreshData, pollMs);
+  } catch (e) {
+    console.error(e);
+    error.value = e instanceof Error ? e.message : 'Failed to initialize map';
+  }
 });
 
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer);
-  if (map.value) {
-    map.value.remove();
-    map.value = null;
+  googleDriverMarkers.forEach((m) => m.setMap(null));
+  googleRequestMarkers.forEach((m) => m.setMap(null));
+  googleDriverMarkers.length = 0;
+  googleRequestMarkers.length = 0;
+  googleMap = null;
+  googleInfoWindow = null;
+  googleInitFitted = false;
+  if (leafletMap.value) {
+    leafletMap.value.remove();
+    leafletMap.value = null;
   }
 });
 </script>
-
