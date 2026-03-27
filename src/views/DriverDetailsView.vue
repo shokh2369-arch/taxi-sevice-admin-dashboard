@@ -5,7 +5,7 @@
     <div v-else-if="driver">
     <h1>Driver #{{ driver.driver_id }}</h1>
     <div class="card">
-      <p><strong>Name:</strong> {{ driver.name }}</p>
+      <p><strong>Name:</strong> {{ driverDisplayName(driver) }}</p>
       <p><strong>Phone:</strong> {{ driver.phone }}</p>
       <p><strong>Car:</strong> {{ driver.car_model }}</p>
       <p><strong>Plate:</strong> {{ driver.plate_number }}</p>
@@ -92,6 +92,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { apiGet, apiPost } from '../api';
+import { driverDisplayName } from '../utils/driverDisplayName';
 
 const route = useRoute();
 const id = Number(route.params.id);

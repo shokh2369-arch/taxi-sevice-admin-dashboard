@@ -35,7 +35,7 @@
           style="cursor: pointer"
         >
           <td>{{ d.driver_id }}</td>
-          <td>{{ d.name }}</td>
+          <td>{{ driverDisplayName(d) }}</td>
           <td>{{ d.phone }}</td>
           <td>{{ d.car_model }}</td>
           <td>{{ d.plate_number }}</td>
@@ -70,6 +70,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiGet, apiPost } from '../api';
+import { driverDisplayName } from '../utils/driverDisplayName';
 
 const router = useRouter();
 const drivers = ref([]);

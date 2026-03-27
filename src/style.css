@@ -93,6 +93,11 @@ a {
   color: #b91c1c;
 }
 
+.badge-warning {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 .button {
   background: #111827;
   color: white;
@@ -124,5 +129,61 @@ a {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
   max-width: 320px;
   width: 100%;
+}
+
+.map-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 1rem;
+}
+
+.map-sidebar {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.map-box {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+}
+
+.map-canvas {
+  height: 75vh;
+  min-height: 460px;
+}
+
+.map-legend {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+}
+
+.legend-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 0.35rem;
+}
+
+.legend-green { background: #16a34a; }
+.legend-gray { background: #6b7280; }
+.legend-red { background: #dc2626; }
+.legend-blue { background: #2563eb; }
+
+@media (max-width: 900px) {
+  .map-layout {
+    grid-template-columns: 1fr;
+  }
+  .map-canvas {
+    height: 65vh;
+  }
 }
 

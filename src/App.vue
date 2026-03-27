@@ -6,6 +6,8 @@
         <RouterLink to="/">Dashboard</RouterLink>
         <RouterLink to="/drivers">Drivers</RouterLink>
         <RouterLink to="/payments">Payments</RouterLink>
+        <RouterLink to="/driver-actions">Driver actions</RouterLink>
+        <RouterLink to="/map">Map</RouterLink>
       </nav>
     </header>
     <main class="container">
