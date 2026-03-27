@@ -19,6 +19,8 @@ export function driverDisplayName(d) {
     app.username,
     d.telegram_username,
     app.telegram_username,
+    d.front_name,
+    app.front_name,
     [d.first_name ?? app.first_name, d.last_name ?? app.last_name].filter(Boolean).join(' ').trim() || null
   ];
 
@@ -28,7 +30,15 @@ export function driverDisplayName(d) {
     }
   }
 
-  const phone = d.phone ?? d.driver_phone ?? d.phone_number ?? app.phone ?? app.driver_phone ?? app.phone_number;
+  const phone =
+    d.phone ??
+    d.driver_phone ??
+    d.phone_number ??
+    d.application_phone ??
+    app.phone ??
+    app.driver_phone ??
+    app.phone_number ??
+    app.application_phone;
   if (phone != null && String(phone).trim() !== '') {
     return String(phone).trim();
   }

@@ -135,24 +135,26 @@ function normalizeDriver(d, idx) {
   const driverId = pickFirst(d, app, ['driver_id', 'id', 'driverId']);
   const statusRaw =
     pickFirst(d, app, [
+      'application_app_status',
+      'application_status',
+      'app_status',
+      'verification_status',
       'active_status',
       'is_active',
       'is_online',
       'status',
       'state',
       'driver_status',
-      'application_app_status',
-      'application_status',
-      'app_status'
+      'online'
     ]);
   const status = normalizeStatus(statusRaw);
   return {
     ...d,
     ...app,
     driver_id: driverId,
-    phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number']) ?? '',
-    car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'car', 'carName', 'car_name']) ?? '',
-    plate_number: pickFirst(d, app, ['plate_number', 'plate_text', 'plate', 'plateNo']) ?? '',
+    phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number', 'application_phone', 'phone_text']) ?? '',
+    car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',
+    plate_number: pickFirst(d, app, ['plate_number', 'plate_text', 'application_plate_text', 'plate', 'plateNo']) ?? '',
     balance: Number(pickFirst(d, app, ['balance', 'driver_balance']) ?? 0) || 0,
     total_paid: Number(pickFirst(d, app, ['total_paid', 'totalPaid', 'paid_total']) ?? 0) || 0,
     status,
@@ -167,6 +169,10 @@ function pickFirst(a, b, keys) {
     if (va != null && String(va).trim() !== '') return va;
     const vb = b?.[k];
     if (vb != null && String(vb).trim() !== '') return vb;
+    const vc = a?.[`application_${k}`];
+    if (vc != null && String(vc).trim() !== '') return vc;
+    const vd = b?.[`application_${k}`];
+    if (vd != null && String(vd).trim() !== '') return vd;
   }
   return null;
 }
@@ -178,7 +184,9 @@ function normalizeStatus(v) {
   if (['1', 'TRUE', 'YES'].includes(s)) return 'ACTIVE';
   if (['0', 'FALSE', 'NO'].includes(s)) return 'INACTIVE';
   if (['ACTIVE', 'ONLINE', 'APPROVED'].includes(s)) return 'ACTIVE';
+  if (['APPROVE', 'VERIFIED'].includes(s)) return 'ACTIVE';
   if (['PENDING', 'WAITING', 'WAITING_APPROVAL'].includes(s)) return 'PENDING';
+  if (['REJECTED', 'DECLINED'].includes(s)) return 'BLOCKED';
   if (['BLOCKED', 'BANNED'].includes(s)) return 'BLOCKED';
   if (['INACTIVE', 'OFFLINE', 'DISABLED'].includes(s)) return 'INACTIVE';
   return s;
