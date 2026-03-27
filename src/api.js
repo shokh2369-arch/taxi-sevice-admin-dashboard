@@ -3,24 +3,40 @@ const API_BASE =
   (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) ||
   'https://taxi-1-kpkh.onrender.com';
 
-export async function apiGet(path) {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) {
-    throw new Error(`GET ${path} failed: ${res.status}`);
+function normalizeFetchError(err, method, path) {
+  const msg = err instanceof Error ? err.message : '';
+  if (msg === 'Failed to fetch') {
+    return new Error(`Cannot reach backend API (${method} ${path}). Check VITE_API_BASE_URL or backend status.`);
   }
-  return res.json();
+  return err instanceof Error ? err : new Error(`${method} ${path} failed`);
+}
+
+export async function apiGet(path) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`);
+    if (!res.ok) {
+      throw new Error(`GET ${path} failed: ${res.status}`);
+    }
+    return res.json();
+  } catch (e) {
+    throw normalizeFetchError(e, 'GET', path);
+  }
 }
 
 export async function apiPost(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  if (!res.ok) {
-    throw new Error(`POST ${path} failed: ${res.status}`);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) {
+      throw new Error(`POST ${path} failed: ${res.status}`);
+    }
+    return res;
+  } catch (e) {
+    throw normalizeFetchError(e, 'POST', path);
   }
-  return res;
 }
 
 export { API_BASE };

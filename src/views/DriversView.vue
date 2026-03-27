@@ -30,31 +30,31 @@
       <tbody>
         <tr
           v-for="d in filteredDrivers"
-          :key="d.driver_id"
+          :key="d._key"
           @click="goToDriver(d.driver_id)"
-          style="cursor: pointer"
+          :style="{ cursor: d.driver_id != null ? 'pointer' : 'default' }"
         >
-          <td>{{ d.driver_id }}</td>
+          <td>{{ d.driver_id ?? '—' }}</td>
           <td>{{ driverDisplayName(d) }}</td>
-          <td>{{ d.phone }}</td>
-          <td>{{ d.car_model }}</td>
-          <td>{{ d.plate_number }}</td>
+          <td>{{ d.phone || '—' }}</td>
+          <td>{{ d.car_model || '—' }}</td>
+          <td>{{ d.plate_number || '—' }}</td>
           <td>{{ formatMoney(d.balance) }}</td>
           <td>{{ formatMoney(d.total_paid) }}</td>
           <td>
-            <span class="badge" :class="d.status === 'ACTIVE' ? 'badge-active' : 'badge-inactive'">
-              {{ d.status }}
+            <span class="badge" :class="statusClass(d.status)">
+              {{ d.status || 'UNKNOWN' }}
             </span>
           </td>
           <td @click.stop>
             <input
               type="number"
               class="input"
-              v-model.number="topups[d.driver_id]"
+              v-model.number="topups[d._topupKey]"
               placeholder="amount"
               style="width: 80px"
             />
-            <button class="button" @click="submitTopup(d.driver_id)">
+            <button class="button" :disabled="d.driver_id == null" @click="submitTopup(d.driver_id)">
               Add
             </button>
           </td>
@@ -92,7 +92,9 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    drivers.value = await apiGet('/admin/drivers');
+    const raw = await apiGet('/admin/drivers');
+    const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
+    drivers.value = rows.map((d, idx) => normalizeDriver(d, idx));
   } catch (e) {
     console.error(e);
     error.value = e instanceof Error ? e.message : 'Failed to load drivers';
@@ -107,10 +109,12 @@ function formatMoney(amount) {
 }
 
 function goToDriver(id) {
+  if (id == null) return;
   router.push({ name: 'driver-details', params: { id } });
 }
 
 async function submitTopup(id) {
+  if (id == null) return;
   const amount = topups.value[id];
   if (!amount || amount <= 0) return;
   const value = Math.round(amount);
@@ -124,6 +128,40 @@ async function submitTopup(id) {
   } catch (e) {
     console.error(e);
   }
+}
+
+function normalizeDriver(d, idx) {
+  const driverId = d?.driver_id ?? d?.id ?? d?.driverId ?? null;
+  const statusRaw = d?.status ?? d?.state ?? d?.driver_status ?? d?.is_active;
+  const status = normalizeStatus(statusRaw);
+  return {
+    ...d,
+    driver_id: driverId,
+    phone: d?.phone ?? d?.driver_phone ?? d?.phone_number ?? '',
+    car_model: d?.car_model ?? d?.car ?? d?.carName ?? d?.car_name ?? '',
+    plate_number: d?.plate_number ?? d?.plate ?? d?.plateNo ?? '',
+    balance: Number(d?.balance ?? d?.driver_balance ?? 0) || 0,
+    total_paid: Number(d?.total_paid ?? d?.totalPaid ?? d?.paid_total ?? 0) || 0,
+    status,
+    _topupKey: String(driverId ?? `row-${idx}`),
+    _key: String(driverId ?? d?.phone ?? `row-${idx}`)
+  };
+}
+
+function normalizeStatus(v) {
+  if (typeof v === 'boolean') return v ? 'ACTIVE' : 'INACTIVE';
+  const s = String(v ?? '').trim().toUpperCase();
+  if (!s) return 'UNKNOWN';
+  if (['ACTIVE', 'ONLINE', 'APPROVED'].includes(s)) return 'ACTIVE';
+  if (['PENDING', 'WAITING', 'WAITING_APPROVAL'].includes(s)) return 'PENDING';
+  if (['BLOCKED', 'BANNED'].includes(s)) return 'BLOCKED';
+  if (['INACTIVE', 'OFFLINE', 'DISABLED'].includes(s)) return 'INACTIVE';
+  return s;
+}
+
+function statusClass(status) {
+  if (status === 'ACTIVE') return 'badge-active';
+  return 'badge-inactive';
 }
 </script>
 

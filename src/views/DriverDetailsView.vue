@@ -3,18 +3,18 @@
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
     <div v-else-if="driver">
-    <h1>Driver #{{ driver.driver_id }}</h1>
+    <h1>Driver #{{ driver.driver_id ?? '—' }}</h1>
     <div class="card">
       <p><strong>Name:</strong> {{ driverDisplayName(driver) }}</p>
-      <p><strong>Phone:</strong> {{ driver.phone }}</p>
-      <p><strong>Car:</strong> {{ driver.car_model }}</p>
-      <p><strong>Plate:</strong> {{ driver.plate_number }}</p>
+      <p><strong>Phone:</strong> {{ driver.phone || '—' }}</p>
+      <p><strong>Car:</strong> {{ driver.car_model || '—' }}</p>
+      <p><strong>Plate:</strong> {{ driver.plate_number || '—' }}</p>
       <p><strong>Balance:</strong> {{ formatMoney(driver.balance) }}</p>
       <p><strong>Total paid:</strong> {{ formatMoney(driver.total_paid) }}</p>
       <p>
         <strong>Status:</strong>
         <span class="badge" :class="driver.status === 'ACTIVE' ? 'badge-active' : 'badge-inactive'">
-          {{ driver.status }}
+          {{ driver.status || 'UNKNOWN' }}
         </span>
       </p>
     </div>
@@ -112,8 +112,10 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const drivers = await apiGet('/admin/drivers');
-    driver.value = drivers.find((d) => d.driver_id === id) || null;
+    const raw = await apiGet('/admin/drivers');
+    const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
+    const normalized = rows.map(normalizeDriver);
+    driver.value = normalized.find((d) => Number(d.driver_id) === id) || null;
 
     payments.value = await apiGet(`/admin/payments?driver_id=${id}`);
   } catch (e) {
@@ -184,6 +186,30 @@ async function add() {
   } catch (e) {
     console.error(e);
   }
+}
+
+function normalizeDriver(d) {
+  return {
+    ...d,
+    driver_id: d?.driver_id ?? d?.id ?? d?.driverId ?? null,
+    phone: d?.phone ?? d?.driver_phone ?? d?.phone_number ?? '',
+    car_model: d?.car_model ?? d?.car ?? d?.carName ?? d?.car_name ?? '',
+    plate_number: d?.plate_number ?? d?.plate ?? d?.plateNo ?? '',
+    balance: Number(d?.balance ?? d?.driver_balance ?? 0) || 0,
+    total_paid: Number(d?.total_paid ?? d?.totalPaid ?? d?.paid_total ?? 0) || 0,
+    status: normalizeStatus(d?.status ?? d?.state ?? d?.driver_status ?? d?.is_active)
+  };
+}
+
+function normalizeStatus(v) {
+  if (typeof v === 'boolean') return v ? 'ACTIVE' : 'INACTIVE';
+  const s = String(v ?? '').trim().toUpperCase();
+  if (!s) return 'UNKNOWN';
+  if (['ACTIVE', 'ONLINE', 'APPROVED'].includes(s)) return 'ACTIVE';
+  if (['PENDING', 'WAITING', 'WAITING_APPROVAL'].includes(s)) return 'PENDING';
+  if (['BLOCKED', 'BANNED'].includes(s)) return 'BLOCKED';
+  if (['INACTIVE', 'OFFLINE', 'DISABLED'].includes(s)) return 'INACTIVE';
+  return s;
 }
 </script>
 
