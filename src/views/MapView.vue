@@ -245,7 +245,12 @@ async function refreshData() {
     }
   } catch (e) {
     console.error(e);
-    error.value = e instanceof Error ? e.message : 'Failed to load map data';
+    const msg = e instanceof Error ? e.message : '';
+    if (msg === 'Failed to fetch') {
+      error.value = 'Cannot reach backend API right now. Check VITE_API_BASE_URL / backend status. Auto-retrying...';
+    } else {
+      error.value = msg || 'Failed to load map data';
+    }
   }
 }
 
