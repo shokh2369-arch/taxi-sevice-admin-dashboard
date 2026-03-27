@@ -4,6 +4,19 @@
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
     <template v-else>
+      <details v-if="debugKeys" class="card" style="margin-bottom: 1rem;">
+        <summary style="cursor:pointer;">Debug: /admin/drivers payload keys</summary>
+        <div style="margin-top: 0.75rem;">
+          <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 0.35rem;">
+            Top-level keys (first row)
+          </div>
+          <pre style="white-space: pre-wrap; margin: 0;">{{ debugKeys.top.join(', ') }}</pre>
+          <div style="font-size: 0.85rem; color: #6b7280; margin: 0.75rem 0 0.35rem;">
+            Nested application keys (first row)
+          </div>
+          <pre style="white-space: pre-wrap; margin: 0;">{{ debugKeys.app.join(', ') }}</pre>
+        </div>
+      </details>
       <div style="margin-bottom: 1rem;">
         <input
           v-model.trim="phoneSearch"
@@ -78,6 +91,7 @@ const phoneSearch = ref('');
 const topups = ref({});
 const loading = ref(true);
 const error = ref('');
+const debugKeys = ref(null);
 
 const filteredDrivers = computed(() => {
   const q = phoneSearch.value;
@@ -94,6 +108,7 @@ async function load() {
   try {
     const raw = await apiGet('/admin/drivers');
     const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
+    captureDebugKeys(rows);
     drivers.value = rows.map((d, idx) => normalizeDriver(d, idx));
   } catch (e) {
     console.error(e);
@@ -101,6 +116,18 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+function captureDebugKeys(rows) {
+  if (!import.meta.env.DEV) return;
+  if (debugKeys.value) return;
+  const first = rows?.[0];
+  if (!first || typeof first !== 'object') return;
+  const app = first?.application ?? first?.driver_application ?? first?.application_data ?? first?.app ?? null;
+  debugKeys.value = {
+    top: Object.keys(first).sort(),
+    app: app && typeof app === 'object' ? Object.keys(app).sort() : []
+  };
 }
 
 function formatMoney(amount) {
