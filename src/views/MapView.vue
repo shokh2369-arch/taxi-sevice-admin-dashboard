@@ -13,6 +13,7 @@
     </div>
 
     <div v-if="error" style="color: #b91c1c; margin-bottom: 0.75rem;">{{ error }}</div>
+    <div v-if="requestWarning" style="color: #b45309; margin-bottom: 0.75rem;">{{ requestWarning }}</div>
 
     <div class="map-layout">
       <aside class="map-sidebar">
@@ -86,6 +87,17 @@ const error = ref('');
 const selectedItem = ref(null);
 const nearestList = ref([]);
 let pollTimer = null;
+const requestWarning = ref('');
+
+const DRIVER_ENDPOINTS = (
+  import.meta.env.VITE_MAP_DRIVER_ENDPOINTS ||
+  '/admin/drivers/live,/admin/drivers,/drivers/live,/drivers'
+).split(',').map((s) => s.trim()).filter(Boolean);
+
+const REQUEST_ENDPOINTS = (
+  import.meta.env.VITE_MAP_REQUEST_ENDPOINTS ||
+  '/admin/requests,/admin/ride-requests,/admin/ride-requests/active,/ride-requests,/requests'
+).split(',').map((s) => s.trim()).filter(Boolean);
 
 function num(v) {
   const n = Number(v);
@@ -126,6 +138,14 @@ async function firstSuccess(paths) {
     }
   }
   throw lastErr || new Error('All endpoint attempts failed');
+}
+
+async function firstSuccessOrEmpty(paths) {
+  try {
+    return await firstSuccess(paths);
+  } catch (e) {
+    return [];
+  }
 }
 
 function normalizeDrivers(raw) {
@@ -203,15 +223,18 @@ function renderMarkers(drivers, requests) {
 
 async function refreshData() {
   error.value = '';
+  requestWarning.value = '';
   try {
-    const [driversRaw, requestsRaw] = await Promise.all([
-      firstSuccess(['/admin/drivers/live', '/admin/drivers', '/drivers/live', '/drivers']),
-      firstSuccess(['/admin/requests', '/admin/ride-requests', '/ride-requests', '/requests'])
-    ]);
+    const driversRaw = await firstSuccess(DRIVER_ENDPOINTS);
+    const requestsRaw = await firstSuccessOrEmpty(REQUEST_ENDPOINTS);
 
     const drivers = normalizeDrivers(driversRaw);
     const requests = normalizeRequests(requestsRaw);
     renderMarkers(drivers, requests);
+
+    if (!requests.length) {
+      requestWarning.value = 'Ride request endpoints not found or returned no data.';
+    }
 
     if (drivers.length || requests.length) {
       const group = L.featureGroup([...driverLayer.value.getLayers(), ...requestLayer.value.getLayers()]);
