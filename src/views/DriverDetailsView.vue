@@ -189,25 +189,40 @@ async function add() {
 }
 
 function normalizeDriver(d) {
+  const app = d?.application ?? d?.driver_application ?? d?.application_data ?? d?.app ?? {};
   return {
     ...d,
-    driver_id: d?.driver_id ?? d?.id ?? d?.driverId ?? null,
-    phone: d?.phone ?? d?.driver_phone ?? d?.phone_number ?? '',
-    car_model: d?.car_model ?? d?.car_type_model ?? d?.car ?? d?.carName ?? d?.car_name ?? '',
-    plate_number: d?.plate_number ?? d?.plate_text ?? d?.plate ?? d?.plateNo ?? '',
-    balance: Number(d?.balance ?? d?.driver_balance ?? 0) || 0,
-    total_paid: Number(d?.total_paid ?? d?.totalPaid ?? d?.paid_total ?? 0) || 0,
+    ...app,
+    driver_id: pickFirst(d, app, ['driver_id', 'id', 'driverId']),
+    phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number']) ?? '',
+    car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'car', 'carName', 'car_name']) ?? '',
+    plate_number: pickFirst(d, app, ['plate_number', 'plate_text', 'plate', 'plateNo']) ?? '',
+    balance: Number(pickFirst(d, app, ['balance', 'driver_balance']) ?? 0) || 0,
+    total_paid: Number(pickFirst(d, app, ['total_paid', 'totalPaid', 'paid_total']) ?? 0) || 0,
     status: normalizeStatus(
-      d?.active_status ??
-      d?.is_active ??
-      d?.is_online ??
-      d?.status ??
-      d?.state ??
-      d?.driver_status ??
-      d?.application_app_status ??
-      d?.application_status
+      pickFirst(d, app, [
+        'active_status',
+        'is_active',
+        'is_online',
+        'status',
+        'state',
+        'driver_status',
+        'application_app_status',
+        'application_status',
+        'app_status'
+      ])
     )
   };
+}
+
+function pickFirst(a, b, keys) {
+  for (const k of keys) {
+    const va = a?.[k];
+    if (va != null && String(va).trim() !== '') return va;
+    const vb = b?.[k];
+    if (vb != null && String(vb).trim() !== '') return vb;
+  }
+  return null;
 }
 
 function normalizeStatus(v) {
