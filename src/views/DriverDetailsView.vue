@@ -197,7 +197,7 @@ function normalizeDriver(d) {
     phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number', 'application_phone', 'phone_text']) ?? '',
     car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',
     plate_number: pickFirst(d, app, ['plate_number', 'plate_text', 'application_plate_text', 'plate', 'plateNo']) ?? '',
-    balance: Number(pickFirst(d, app, ['balance', 'driver_balance']) ?? 0) || 0,
+    balance: Number(pickFirst(d, app, ['balance', 'balance_integer', 'wallet_balance', 'driver_balance', 'driver_balance_integer']) ?? 0) || 0,
     total_paid: Number(pickFirst(d, app, ['total_paid', 'totalPaid', 'paid_total']) ?? 0) || 0,
     status: normalizeStatus(
       pickFirst(d, app, [
