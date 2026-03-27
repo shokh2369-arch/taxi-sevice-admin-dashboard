@@ -7,6 +7,10 @@ export function driverDisplayName(d) {
   const app = d.application ?? d.driver_application ?? d.application_data ?? d.app ?? {};
 
   const parts = [
+    d.first_name_text,
+    app.first_name_text,
+    d.application_first_name_text,
+    app.application_first_name_text,
     d.name,
     app.name,
     d.full_name,
@@ -21,6 +25,7 @@ export function driverDisplayName(d) {
     app.telegram_username,
     d.front_name,
     app.front_name,
+    [d.first_name_text ?? app.first_name_text, d.last_name_text ?? app.last_name_text].filter(Boolean).join(' ').trim() || null,
     [d.first_name ?? app.first_name, d.last_name ?? app.last_name].filter(Boolean).join(' ').trim() || null
   ];
 
