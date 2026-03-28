@@ -94,7 +94,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { apiGet } from '../api';
+import { fetchUsersList } from '../api/users.js';
 import { fetchLegalAcceptances } from '../api/legal.js';
 import LegalAcceptanceModal from '../components/LegalAcceptanceModal.vue';
 import {
@@ -169,8 +169,8 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    /** GET /admin/users — JSON array: id, telegram_id, role, name, phone, terms_accepted, created_at */
-    const raw = await apiGet('/admin/users');
+    /** GET /admin/users (or fallbacks in fetchUsersList) */
+    const raw = await fetchUsersList();
     const rows = Array.isArray(raw) ? raw : raw?.users || raw?.items || [];
     users.value = rows.map((row, idx) => normalizeUser(row, idx));
     legalAcceptancesError.value = '';

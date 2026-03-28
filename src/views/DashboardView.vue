@@ -17,30 +17,32 @@
           <div>Inactive drivers</div>
           <strong>{{ summary.inactive_drivers }}</strong>
         </div>
-        <template v-if="dashBal.mode === 'split'">
+        <template v-if="cardBalances.mode === 'split'">
           <div class="card">
             <div>Jami promo balans</div>
-            <strong>{{ formatMoney(dashBal.promo) }}</strong>
+            <strong>{{ formatMoney(cardBalances.promo) }}</strong>
             <div class="balance-hint" style="margin-top: 0.35rem;">Platforma krediti; naqdlashtirilmaydi.</div>
           </div>
           <div class="card">
             <div>Jami naqd balans</div>
-            <strong>{{ formatMoney(dashBal.cash) }}</strong>
+            <strong>{{ formatMoney(cardBalances.cash) }}</strong>
             <div class="balance-hint" style="margin-top: 0.35rem;">Haqiqiy pul balansi.</div>
           </div>
           <div class="card">
             <div>Jami haydovchi balansi (promo+naqd)</div>
-            <strong>{{ formatMoney(dashBal.combined ?? summary.total_driver_balances) }}</strong>
-            <div class="balance-hint" style="margin-top: 0.35rem;">API: total_driver_balances</div>
+            <strong>{{ formatMoney(cardBalances.combined ?? summary.total_driver_balances) }}</strong>
+            <div v-if="cardBalances.sourceHint" class="balance-hint" style="margin-top: 0.35rem;">{{ cardBalances.sourceHint }}</div>
+            <div v-else class="balance-hint" style="margin-top: 0.35rem;">API: total_driver_balances</div>
           </div>
         </template>
         <div v-else class="card">
           <div>Jami haydovchi balansi</div>
-          <strong>{{ formatMoney(dashBal.combined ?? summary.total_driver_balances) }}</strong>
+          <strong>{{ formatMoney(cardBalances.combined ?? summary.total_driver_balances) }}</strong>
+          <div v-if="driversAggLoading" class="balance-hint" style="margin-top: 0.35rem;">Promo/naqd ajratmasi tekshirilmoqda…</div>
         </div>
-        <div v-if="dashBal.commissionAccrued != null" class="card">
+        <div v-if="cardBalances.commissionAccrued != null" class="card">
           <div>Hisoblangan komissiya (ichki)</div>
-          <strong>{{ formatMoney(dashBal.commissionAccrued) }}</strong>
+          <strong>{{ formatMoney(cardBalances.commissionAccrued) }}</strong>
           <div class="balance-hint" style="margin-top: 0.35rem;">API: total_internal_commission_accrued</div>
         </div>
         <div class="card">
@@ -110,9 +112,11 @@ import { computed, onMounted, ref } from 'vue';
 import { apiGet } from '../api';
 import { fetchLegalStats, fetchLegalMissing } from '../api/legal.js';
 import { normalizeLegalStats, normalizeMissingRow, unwrapMissingList } from '../utils/legalStatus.js';
-import { normalizeDashboardBalances } from '../utils/driverBalances.js';
+import { aggregateBalancesFromDriversPayload, normalizeDashboardBalances } from '../utils/driverBalances.js';
 
 const summary = ref(null);
+const driversAgg = ref(/** @type {{ promoSum: number, cashSum: number, combinedSum: number, anySplit: boolean } | null} */ (null));
+const driversAggLoading = ref(false);
 const loading = ref(true);
 const error = ref('');
 
@@ -134,6 +138,40 @@ const legalMissingRows = computed(() => {
 
 const dashBal = computed(() => normalizeDashboardBalances(summary.value));
 
+/** Dashboard cards: summary totals, else sums from /admin/drivers when rows carry promo/cash. */
+const cardBalances = computed(() => {
+  const d = dashBal.value;
+  const agg = driversAgg.value;
+  if (d.mode === 'split') {
+    return {
+      mode: 'split',
+      promo: d.promo ?? 0,
+      cash: d.cash ?? 0,
+      combined: d.combined,
+      commissionAccrued: d.commissionAccrued,
+      sourceHint: null
+    };
+  }
+  if (agg?.anySplit) {
+    return {
+      mode: 'split',
+      promo: agg.promoSum,
+      cash: agg.cashSum,
+      combined: agg.combinedSum || summary.value?.total_driver_balances,
+      commissionAccrued: d.commissionAccrued,
+      sourceHint: 'Haydovchilar ro‘yxatidan jamlangan (/admin/drivers)'
+    };
+  }
+  return {
+    mode: 'legacy',
+    promo: null,
+    cash: null,
+    combined: d.combined,
+    commissionAccrued: d.commissionAccrued,
+    sourceHint: null
+  };
+});
+
 onMounted(() => {
   loadDashboard();
   loadLegalStats();
@@ -143,8 +181,22 @@ onMounted(() => {
 async function loadDashboard() {
   loading.value = true;
   error.value = '';
+  driversAgg.value = null;
   try {
     summary.value = await apiGet('/admin/dashboard');
+    const dash = normalizeDashboardBalances(summary.value);
+    if (dash.mode === 'legacy') {
+      driversAggLoading.value = true;
+      try {
+        const raw = await apiGet('/admin/drivers');
+        driversAgg.value = aggregateBalancesFromDriversPayload(raw);
+      } catch (e) {
+        console.error(e);
+        driversAgg.value = null;
+      } finally {
+        driversAggLoading.value = false;
+      }
+    }
   } catch (e) {
     console.error(e);
     error.value = e instanceof Error ? e.message : 'Failed to load dashboard';

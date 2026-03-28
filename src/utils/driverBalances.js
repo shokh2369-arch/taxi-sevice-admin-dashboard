@@ -24,13 +24,17 @@ export function normalizeDriverBalances(root, app) {
   );
 
   if (hasSplit) {
+    let total = combined;
+    if (total === 0 && (promo !== 0 || cash !== 0)) {
+      total = promo + cash;
+    }
     return {
       balance_mode: 'split',
       promo_balance: promo,
       cash_balance: cash,
-      combined_balance: combined,
-      legacy_balance: combined,
-      legacy_also: combined
+      combined_balance: total,
+      legacy_balance: total,
+      legacy_also: total
     };
   }
 
@@ -161,4 +165,31 @@ function pickNum(s, keys) {
     if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v);
   }
   return null;
+}
+
+/**
+ * When GET /admin/dashboard omits total_promo_balances / total_cash_balances but
+ * GET /admin/drivers rows include promo_balance & cash_balance, sum them for dashboard cards.
+ * @param {unknown} raw response from GET /admin/drivers
+ */
+export function aggregateBalancesFromDriversPayload(raw) {
+  const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
+  let promoSum = 0;
+  let cashSum = 0;
+  let combinedSum = 0;
+  let anySplit = false;
+  for (const d of rows) {
+    if (!d || typeof d !== 'object') continue;
+    const o = /** @type {Record<string, unknown>} */ (d);
+    const appRaw = o.application ?? o.driver_application ?? o.application_data ?? o.app;
+    const app = appRaw && typeof appRaw === 'object' ? /** @type {Record<string, unknown>} */ (appRaw) : {};
+    const b = normalizeDriverBalances(o, app);
+    if (b.balance_mode === 'split') {
+      anySplit = true;
+      promoSum += b.promo_balance;
+      cashSum += b.cash_balance;
+    }
+    combinedSum += b.combined_balance;
+  }
+  return { promoSum, cashSum, combinedSum, anySplit };
 }
