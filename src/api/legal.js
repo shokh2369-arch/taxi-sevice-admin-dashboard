@@ -1,23 +1,43 @@
-import { apiGet } from '../api.js';
+import { apiGet, API_BASE } from '../api.js';
 
-/** Try current Go routes first, then /v1 for older gateways. Same API host as /admin/dashboard. */
-const LEGAL_BASES = ['/admin/legal', '/v1/admin/legal'];
+/**
+ * Legal routes to try (same host as /admin/dashboard).
+ * Order: plain /admin first, then common Go gateway prefixes, then /v1.
+ */
+const LEGAL_BASES = [
+  '/admin/legal',
+  '/api/admin/legal',
+  '/api/v1/admin/legal',
+  '/v1/admin/legal'
+];
 
 /**
  * @param {string} resourcePath path after .../legal e.g. `/stats`, `/acceptances`, `/missing?actor_type=user`
  */
 async function legalGet(resourcePath) {
-  let lastErr = /** @type {Error|null} */ (null);
+  const attemptedPaths = [];
+  let lastNon404 = /** @type {Error|null} */ (null);
+
   for (const base of LEGAL_BASES) {
+    const path = `${base}${resourcePath}`;
+    attemptedPaths.push(path);
     try {
-      return await apiGet(`${base}${resourcePath}`);
+      return await apiGet(path);
     } catch (e) {
-      lastErr = e instanceof Error ? e : new Error(String(e));
-      if (lastErr.message.includes('404')) continue;
-      throw lastErr;
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.message.includes('404')) continue;
+      lastNon404 = err;
+      throw err;
     }
   }
-  throw lastErr ?? new Error(`Legal API missing: tried ${LEGAL_BASES.join(', ')}${resourcePath}`);
+
+  if (lastNon404) throw lastNon404;
+
+  const fullUrls = attemptedPaths.map((p) => `${API_BASE}${p}`);
+  throw new Error(
+    `Legal API: all routes returned 404. Tried:\n${fullUrls.map((u) => `  • GET ${u}`).join('\n')}\n` +
+      `Implement legal handlers on this API, or set VITE_API_BASE_URL / VITE_API_URL to the Go server that exposes them.`
+  );
 }
 
 /**

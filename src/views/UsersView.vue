@@ -4,7 +4,11 @@
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
     <template v-else>
-      <p v-if="legalAcceptancesError" class="muted" style="margin-bottom: 0.75rem; color: #b45309;">
+      <p
+        v-if="legalAcceptancesError"
+        class="muted"
+        style="margin-bottom: 0.75rem; color: #b45309; white-space: pre-wrap; font-size: 0.82rem;"
+      >
         Legal acceptances: {{ legalAcceptancesError }} (user terms fallback: API terms_accepted)
       </p>
       <div class="filter-row">

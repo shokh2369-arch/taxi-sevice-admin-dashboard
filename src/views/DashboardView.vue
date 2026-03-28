@@ -53,7 +53,13 @@
 
       <h2 class="section-title">Legal compliance</h2>
       <div v-if="legalStatsLoading" class="muted">Loading legal stats…</div>
-      <div v-else-if="legalStatsError" class="card" style="color: #b91c1c;">{{ legalStatsError }}</div>
+      <div
+        v-else-if="legalStatsError"
+        class="card"
+        style="color: #b91c1c; white-space: pre-wrap; font-size: 0.82rem;"
+      >
+        {{ legalStatsError }}
+      </div>
       <div v-else class="card-grid">
         <div class="card">
           <div>Users accepted (legal)</div>
@@ -81,7 +87,13 @@
 
       <h2 class="section-title">Legal issues</h2>
       <div v-if="legalMissingLoading" class="muted">Loading legal issues…</div>
-      <div v-else-if="legalMissingError" class="card" style="color: #b91c1c;">{{ legalMissingError }}</div>
+      <div
+        v-else-if="legalMissingError"
+        class="card"
+        style="color: #b91c1c; white-space: pre-wrap; font-size: 0.82rem;"
+      >
+        {{ legalMissingError }}
+      </div>
       <p v-else-if="!legalMissingRows.length" class="card muted" style="margin: 0;">No outstanding legal issues.</p>
       <table v-else class="table">
         <thead>

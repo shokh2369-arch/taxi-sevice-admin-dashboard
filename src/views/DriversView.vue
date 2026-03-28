@@ -17,7 +17,11 @@
           <pre style="white-space: pre-wrap; margin: 0;">{{ debugKeys.app.join(', ') }}</pre>
         </div>
       </details>
-      <p v-if="legalAcceptancesError" class="muted" style="margin-bottom: 0.75rem; color: #b45309;">
+      <p
+        v-if="legalAcceptancesError"
+        class="muted"
+        style="margin-bottom: 0.75rem; color: #b45309; white-space: pre-wrap; font-size: 0.82rem;"
+      >
         Legal acceptances: {{ legalAcceptancesError }} (columns show as missing)
       </p>
       <div class="filter-row">
