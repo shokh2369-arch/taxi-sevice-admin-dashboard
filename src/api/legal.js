@@ -68,3 +68,11 @@ export function fetchLegalMissing(actorType) {
   const q = actorType ? `?actor_type=${encodeURIComponent(actorType)}` : '';
   return legalGet(`/missing${q}`);
 }
+
+/**
+ * GET /admin/legal/documents (same /admin group as dashboard; mounted when legal service is enabled).
+ * @returns {Promise<unknown>}
+ */
+export function fetchLegalDocuments() {
+  return legalGet('/documents');
+}

@@ -8,6 +8,16 @@ const API_BASE =
   (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) ||
   'https://taxi-1-kpkh.onrender.com';
 
+/** `include` if Go CORS uses credentialed requests + cookie/session (matches ADMIN_DASHBOARD_ORIGIN echo). Default `omit`. */
+function fetchCredentials() {
+  const c =
+    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_CREDENTIALS) || '';
+  const v = String(c).trim().toLowerCase();
+  if (v === 'include') return 'include';
+  if (v === 'same-origin') return 'same-origin';
+  return 'omit';
+}
+
 function normalizeFetchError(err, method, path) {
   const msg = err instanceof Error ? err.message : '';
   if (msg === 'Failed to fetch') {
@@ -20,7 +30,7 @@ function normalizeFetchError(err, method, path) {
 
 export async function apiGet(path) {
   try {
-    const res = await fetch(`${API_BASE}${path}`);
+    const res = await fetch(`${API_BASE}${path}`, { credentials: fetchCredentials() });
     if (!res.ok) {
       throw new Error(`GET ${path} failed: ${res.status}`);
     }
@@ -35,7 +45,8 @@ export async function apiPost(path, body) {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: fetchCredentials()
     });
     if (!res.ok) {
       throw new Error(`POST ${path} failed: ${res.status}`);
