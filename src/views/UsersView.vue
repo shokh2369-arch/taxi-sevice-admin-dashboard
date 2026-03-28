@@ -4,13 +4,16 @@
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
     <template v-else>
-      <p
-        v-if="legalAcceptancesError"
-        class="muted"
-        style="margin-bottom: 0.75rem; color: #b45309; white-space: pre-wrap; font-size: 0.82rem;"
-      >
-        Legal acceptances: {{ legalAcceptancesError }} (user terms fallback: API terms_accepted)
-      </p>
+      <div v-if="legalAcceptancesError" class="card legal-unavailable-card" style="margin-bottom: 1rem;">
+        <p class="muted" style="margin: 0 0 0.35rem; color: #b45309;">
+          <strong>Legal acceptances</strong> unavailable — using <code>terms_accepted</code> from users API where possible.
+        </p>
+        <details v-if="isLegalAllRoutes404(legalAcceptancesError)" class="legal-unavailable-details">
+          <summary>Technical details</summary>
+          <pre>{{ legalAcceptancesError }}</pre>
+        </details>
+        <p v-else class="muted" style="margin: 0; font-size: 0.82rem; white-space: pre-wrap;">{{ legalAcceptancesError }}</p>
+      </div>
       <div class="filter-row">
         <div>
           <input
@@ -99,6 +102,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { fetchUsersList } from '../api/users.js';
+import { isLegalAllRoutes404 } from '../utils/legalUi.js';
 import { fetchLegalAcceptances } from '../api/legal.js';
 import LegalAcceptanceModal from '../components/LegalAcceptanceModal.vue';
 import {

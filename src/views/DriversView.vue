@@ -17,13 +17,16 @@
           <pre style="white-space: pre-wrap; margin: 0;">{{ debugKeys.app.join(', ') }}</pre>
         </div>
       </details>
-      <p
-        v-if="legalAcceptancesError"
-        class="muted"
-        style="margin-bottom: 0.75rem; color: #b45309; white-space: pre-wrap; font-size: 0.82rem;"
-      >
-        Legal acceptances: {{ legalAcceptancesError }} (columns show as missing)
-      </p>
+      <div v-if="legalAcceptancesError" class="card legal-unavailable-card" style="margin-bottom: 1rem;">
+        <p class="muted" style="margin: 0 0 0.35rem; color: #b45309;">
+          <strong>Legal acceptances</strong> unavailable — driver/privacy columns show as missing until the legal API responds.
+        </p>
+        <details v-if="isLegalAllRoutes404(legalAcceptancesError)" class="legal-unavailable-details">
+          <summary>Technical details</summary>
+          <pre>{{ legalAcceptancesError }}</pre>
+        </details>
+        <p v-else class="muted" style="margin: 0; font-size: 0.82rem; white-space: pre-wrap;">{{ legalAcceptancesError }}</p>
+      </div>
       <div class="filter-row">
         <div>
           <input
@@ -165,6 +168,7 @@ import { addDriverBalance } from '../api/driverBalance.js';
 import { fetchLegalAcceptances } from '../api/legal.js';
 import { driverDisplayName } from '../utils/driverDisplayName';
 import LegalAcceptanceModal from '../components/LegalAcceptanceModal.vue';
+import { isLegalAllRoutes404 } from '../utils/legalUi.js';
 import { normalizeDriverBalances } from '../utils/driverBalances.js';
 import { pickDriverInternalCommission } from '../utils/driverCommission.js';
 import {

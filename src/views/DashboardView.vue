@@ -53,12 +53,25 @@
 
       <h2 class="section-title">Legal compliance</h2>
       <div v-if="legalStatsLoading" class="muted">Loading legal stats…</div>
-      <div
-        v-else-if="legalStatsError"
-        class="card"
-        style="color: #b91c1c; white-space: pre-wrap; font-size: 0.82rem;"
-      >
-        {{ legalStatsError }}
+      <div v-else-if="legalStatsError" class="card legal-unavailable-card">
+        <template v-if="isLegalAllRoutes404(legalStatsError)">
+          <p style="margin: 0 0 0.5rem;"><strong>Legal monitoring</strong> is not available on this API host.</p>
+          <p class="balance-hint" style="margin: 0;">
+            No <code>/admin/legal/*</code> route responded at
+            <strong>{{ apiBaseDisplay }}</strong>. On many deployments legal routes exist only when the legal service is enabled in Go
+            (<code>legalSvc != nil</code>). The bundled default API (e.g. Render) may not mount them.
+          </p>
+          <p class="balance-hint" style="margin: 0.5rem 0 0;">
+            Fix: set <code>VITE_API_BASE_URL</code> to the Go server that exposes legal admin routes, or enable legal in the backend and redeploy.
+          </p>
+          <details class="legal-unavailable-details">
+            <summary>Technical details (URLs tried)</summary>
+            <pre>{{ legalStatsError }}</pre>
+          </details>
+        </template>
+        <div v-else style="color: #b91c1c; white-space: pre-wrap; font-size: 0.82rem;">
+          {{ legalStatsError }}
+        </div>
       </div>
       <div v-else class="card-grid">
         <div class="card">
@@ -87,12 +100,18 @@
 
       <h2 class="section-title">Legal issues</h2>
       <div v-if="legalMissingLoading" class="muted">Loading legal issues…</div>
-      <div
-        v-else-if="legalMissingError"
-        class="card"
-        style="color: #b91c1c; white-space: pre-wrap; font-size: 0.82rem;"
-      >
-        {{ legalMissingError }}
+      <div v-else-if="legalMissingError" class="card legal-unavailable-card">
+        <template v-if="isLegalAllRoutes404(legalMissingError)">
+          <p style="margin: 0 0 0.5rem;"><strong>Legal issues list</strong> needs the same legal API routes as above.</p>
+          <p class="balance-hint" style="margin: 0;">Host: <strong>{{ apiBaseDisplay }}</strong></p>
+          <details class="legal-unavailable-details">
+            <summary>Technical details (URLs tried)</summary>
+            <pre>{{ legalMissingError }}</pre>
+          </details>
+        </template>
+        <div v-else style="color: #b91c1c; white-space: pre-wrap; font-size: 0.82rem;">
+          {{ legalMissingError }}
+        </div>
       </div>
       <p v-else-if="!legalMissingRows.length" class="card muted" style="margin: 0;">No outstanding legal issues.</p>
       <table v-else class="table">
@@ -121,10 +140,13 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { apiGet } from '../api';
+import { apiGet, API_BASE } from '../api';
+import { isLegalAllRoutes404 } from '../utils/legalUi.js';
 import { fetchLegalStats, fetchLegalMissing } from '../api/legal.js';
 import { normalizeLegalStats, normalizeMissingRow, unwrapMissingList } from '../utils/legalStatus.js';
 import { aggregateBalancesFromDriversPayload, normalizeDashboardBalances } from '../utils/driverBalances.js';
+
+const apiBaseDisplay = API_BASE;
 
 const summary = ref(null);
 const driversAgg = ref(/** @type {{ promoSum: number, cashSum: number, combinedSum: number, anySplit: boolean } | null} */ (null));
