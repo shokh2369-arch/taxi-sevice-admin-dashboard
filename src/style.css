@@ -98,6 +98,165 @@ a {
   color: #b45309;
 }
 
+.badge-legal-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.badge-legal-miss {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.table-row-legal-alert {
+  background: #fef2f2;
+}
+
+.table-row-legal-alert:hover {
+  background: #fee2e2;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.filter-row label {
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.modal-panel {
+  max-width: 720px;
+  width: 100%;
+  max-height: min(85vh, 640px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.modal-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-panel-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.modal-panel-body {
+  padding: 0.75rem 1rem 1rem;
+  overflow: auto;
+}
+
+.modal-table-wrap .table {
+  font-size: 0.8rem;
+}
+
+.button-ghost {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.button-ghost:hover {
+  background: #d1d5db;
+}
+
+.badge-promo {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-cash {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge-bucket-promo {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+}
+
+.badge-bucket-cash {
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+}
+
+.balance-stack {
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.balance-stack-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.balance-hint {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin-top: 0.15rem;
+  max-width: 14rem;
+}
+
+.card-balance-split {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.card-balance-split:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ledger-amount-promo {
+  font-weight: 600;
+  color: #92400e;
+}
+
+.ledger-amount-cash {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
 .button {
   background: #111827;
   color: white;

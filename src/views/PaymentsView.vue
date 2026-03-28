@@ -1,6 +1,10 @@
 <template>
   <div>
-    <h1>Payments</h1>
+    <h1>To‘lovlar / ichki harakatlar</h1>
+    <p class="balance-hint" style="margin: 0 0 1rem;">
+      Bu sahifa bank yoki Click orqali mijoz to‘lovini anglatmaydi. Ko‘rinadigan summalar ichki hisob-kitob va
+      hisoblangan komissiya uchun; hozirgi bosqichda komissiya promo balans orqali aks ettirilishi mumkin.
+    </p>
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
     <table class="table" v-else-if="payments.length">
@@ -8,9 +12,9 @@
         <tr>
           <th>ID</th>
           <th>Driver</th>
-          <th>Fare price</th>
-          <th>Amount</th>
-          <th>Type</th>
+          <th>Safar narxi</th>
+          <th>Summa</th>
+          <th>Turi</th>
           <th>Note</th>
           <th>Created</th>
         </tr>
@@ -26,19 +30,20 @@
           </td>
           <td>{{ formatTotalPrice(p) }}</td>
           <td>{{ formatMoney(p.amount) }}</td>
-          <td>{{ p.type }}</td>
+          <td>{{ formatPaymentTypeLabel(p.type) }}</td>
           <td>{{ p.note }}</td>
           <td>{{ new Date(p.created_at).toLocaleString() }}</td>
         </tr>
       </tbody>
     </table>
-    <p v-else>Loading...</p>
+    <p v-else class="muted">Harakatlar yo‘q.</p>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue';
 import { apiGet } from '../api';
+import { formatPaymentTypeLabel } from '../utils/paymentLabels.js';
 
 const payments = ref([]);
 const loading = ref(true);

@@ -17,14 +17,28 @@
           <pre style="white-space: pre-wrap; margin: 0;">{{ debugKeys.app.join(', ') }}</pre>
         </div>
       </details>
-      <div style="margin-bottom: 1rem;">
-        <input
-          v-model.trim="phoneSearch"
-          type="text"
-          class="input"
-          placeholder="Search by phone number"
-          style="max-width: 280px;"
-        />
+      <p v-if="legalAcceptancesError" class="muted" style="margin-bottom: 0.75rem; color: #b45309;">
+        Legal acceptances: {{ legalAcceptancesError }} (columns show as missing)
+      </p>
+      <div class="filter-row">
+        <div>
+          <input
+            v-model.trim="phoneSearch"
+            type="text"
+            class="input"
+            placeholder="Search by phone number"
+            style="max-width: 280px;"
+          />
+        </div>
+        <label>
+          Legal filter
+          <select v-model="legalFilter" class="input" style="margin-left: 0.35rem;">
+            <option :value="LEGAL_FILTER_ALL">All</option>
+            <option :value="LEGAL_FILTER_ANY_MISSING">Missing any</option>
+            <option :value="LEGAL_FILTER_TERMS">Missing driver terms</option>
+            <option :value="LEGAL_FILTER_PRIVACY">Missing privacy policy</option>
+          </select>
+        </label>
       </div>
       <table class="table" v-if="filteredDrivers.length">
       <thead>
@@ -34,10 +48,14 @@
           <th>Phone</th>
           <th>Car</th>
           <th>Plate</th>
-          <th>Balance</th>
-          <th>Total paid</th>
+          <th>Balanslar</th>
+          <th>Jami komissiya (ichki)</th>
           <th>Status</th>
-          <th>Add balance</th>
+          <th>Driver terms</th>
+          <th>Privacy</th>
+          <th>Version</th>
+          <th>Legal</th>
+          <th>Balans qo‘shish</th>
         </tr>
       </thead>
       <tbody>
@@ -45,6 +63,7 @@
           v-for="d in filteredDrivers"
           :key="d._key"
           @click="goToDriver(d.driver_id)"
+          :class="{ 'table-row-legal-alert': legalSummary(d).missingCodes.length > 0 }"
           :style="{ cursor: d.driver_id != null ? 'pointer' : 'default' }"
         >
           <td>{{ d.driver_id ?? '—' }}</td>
@@ -52,7 +71,22 @@
           <td>{{ d.phone || '—' }}</td>
           <td>{{ d.car_model || '—' }}</td>
           <td>{{ d.plate_number || '—' }}</td>
-          <td>{{ formatMoney(d.balance) }}</td>
+          <td @click.stop>
+            <div v-if="d.balance_mode === 'split'" class="balance-stack">
+              <div class="balance-stack-row">
+                <span class="badge badge-promo">Promo</span>
+                <span>{{ formatMoney(d.promo_balance) }}</span>
+              </div>
+              <div class="balance-stack-row" style="margin-top: 0.2rem;">
+                <span class="badge badge-cash">Naqd</span>
+                <span>{{ formatMoney(d.cash_balance) }}</span>
+              </div>
+            </div>
+            <div v-else class="balance-stack">
+              <div>{{ formatMoney(d.legacy_balance) }}</div>
+              <div class="balance-hint">Yagona balans (promo/naqd ajratilmagan)</div>
+            </div>
+          </td>
           <td>{{ formatMoney(d.total_paid) }}</td>
           <td>
             <span class="badge" :class="statusClass(d.status)">
@@ -60,44 +94,119 @@
             </span>
           </td>
           <td @click.stop>
-            <input
-              type="number"
-              class="input"
-              v-model.number="topups[d._topupKey]"
-              placeholder="amount"
-              style="width: 80px"
-            />
-            <button class="button" :disabled="d.driver_id == null" @click="submitTopup(d.driver_id)">
-              Add
+            <span class="badge" :class="legalSummary(d).termsOk ? 'badge-legal-ok' : 'badge-legal-miss'">
+              {{ legalSummary(d).termsOk ? '✅' : '❌' }}
+            </span>
+          </td>
+          <td @click.stop>
+            <span class="badge" :class="legalSummary(d).privacyOk ? 'badge-legal-ok' : 'badge-legal-miss'">
+              {{ legalSummary(d).privacyOk ? '✅' : '❌' }}
+            </span>
+          </td>
+          <td @click.stop>{{ legalSummary(d).versionLabel }}</td>
+          <td @click.stop>
+            <button
+              type="button"
+              class="button"
+              :disabled="d.driver_id == null"
+              @click="openLegalModal(d)"
+            >
+              History
             </button>
+          </td>
+          <td @click.stop>
+            <div class="balance-stack" style="min-width: 9rem;">
+              <select v-model="ensureTopup(d._topupKey).bucket" class="input" style="width: 100%; margin-bottom: 0.35rem; font-size: 0.75rem;">
+                <option value="promo">Promo kredit</option>
+                <option value="cash">Naqd balans</option>
+              </select>
+              <input
+                type="number"
+                class="input"
+                v-model.number="ensureTopup(d._topupKey).amount"
+                placeholder="Summa"
+                style="width: 100%; margin-bottom: 0.35rem;"
+              />
+              <button type="button" class="button" style="width: 100%;" :disabled="d.driver_id == null" @click="submitTopup(d.driver_id, d._topupKey)">
+                Qo‘shish
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-else>{{ phoneSearch ? 'No drivers match this phone number.' : 'No drivers.' }}</p>
+    <p v-else>{{ phoneSearch || legalFilter !== LEGAL_FILTER_ALL ? 'No drivers match filters.' : 'No drivers.' }}</p>
     </template>
+
+    <LegalAcceptanceModal
+      :open="legalModalOpen"
+      actor-type="driver"
+      :actor-id="legalModalActorId"
+      :title="legalModalTitle"
+      :acceptances="acceptanceRows"
+      @close="closeLegalModal"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { apiGet, apiPost } from '../api';
+import { apiGet } from '../api';
+import { addDriverBalance } from '../api/driverBalance.js';
+import { fetchLegalAcceptances } from '../api/legal.js';
 import { driverDisplayName } from '../utils/driverDisplayName';
+import LegalAcceptanceModal from '../components/LegalAcceptanceModal.vue';
+import { normalizeDriverBalances } from '../utils/driverBalances.js';
+import {
+  DRIVER_DOC_PRIVACY,
+  DRIVER_DOC_TERMS,
+  buildAcceptanceMap,
+  legalSummaryForActor,
+  passesLegalFilter,
+  LEGAL_FILTER_ALL,
+  LEGAL_FILTER_ANY_MISSING,
+  LEGAL_FILTER_TERMS,
+  LEGAL_FILTER_PRIVACY,
+  unwrapList
+} from '../utils/legalStatus.js';
 
 const router = useRouter();
 const drivers = ref([]);
 const phoneSearch = ref('');
-const topups = ref({});
+/** @type {Record<string, { amount: number|null, bucket: 'promo'|'cash' }>} */
+const topupState = reactive({});
 const loading = ref(true);
 const error = ref('');
 const debugKeys = ref(null);
 
+const acceptanceRows = ref([]);
+const legalAcceptancesError = ref('');
+const legalFilter = ref(LEGAL_FILTER_ALL);
+
+const legalCodes = { termsCode: DRIVER_DOC_TERMS, privacyCode: DRIVER_DOC_PRIVACY };
+
+const acceptanceMap = computed(() => buildAcceptanceMap(acceptanceRows.value));
+
+const legalModalOpen = ref(false);
+const legalModalActorId = ref(null);
+const legalModalTitle = ref('Acceptance history');
+
+function legalSummary(d) {
+  return legalSummaryForActor(acceptanceMap.value, 'driver', d.driver_id, legalCodes);
+}
+
 const filteredDrivers = computed(() => {
+  let list = drivers.value;
   const q = phoneSearch.value;
-  if (!q) return drivers.value;
-  const lower = q.toLowerCase();
-  return drivers.value.filter((d) => (d.phone || '').toLowerCase().includes(lower));
+  if (q) {
+    const lower = q.toLowerCase();
+    list = list.filter((d) => (d.phone || '').toLowerCase().includes(lower));
+  }
+  if (legalFilter.value !== LEGAL_FILTER_ALL) {
+    list = list.filter((d) => passesLegalFilter('driver', legalSummary(d), legalFilter.value, legalCodes));
+  }
+  return list;
 });
 
 onMounted(load);
@@ -110,12 +219,32 @@ async function load() {
     const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
     captureDebugKeys(rows);
     drivers.value = rows.map((d, idx) => normalizeDriver(d, idx));
+    legalAcceptancesError.value = '';
+    try {
+      const acceptancesData = await fetchLegalAcceptances();
+      acceptanceRows.value = unwrapList(acceptancesData);
+    } catch (le) {
+      console.error(le);
+      legalAcceptancesError.value = le instanceof Error ? le.message : 'Failed to load acceptances';
+      acceptanceRows.value = [];
+    }
   } catch (e) {
     console.error(e);
     error.value = e instanceof Error ? e.message : 'Failed to load drivers';
   } finally {
     loading.value = false;
   }
+}
+
+function openLegalModal(d) {
+  if (d.driver_id == null) return;
+  legalModalActorId.value = d.driver_id;
+  legalModalTitle.value = `Legal — driver #${d.driver_id}`;
+  legalModalOpen.value = true;
+}
+
+function closeLegalModal() {
+  legalModalOpen.value = false;
 }
 
 function captureDebugKeys(rows) {
@@ -140,17 +269,34 @@ function goToDriver(id) {
   router.push({ name: 'driver-details', params: { id } });
 }
 
-async function submitTopup(id) {
+/**
+ * @param {string} key
+ */
+function ensureTopup(key) {
+  if (!topupState[key]) {
+    topupState[key] = { amount: null, bucket: 'promo' };
+  }
+  return topupState[key];
+}
+
+/**
+ * @param {string|number|null} id
+ * @param {string} key
+ */
+async function submitTopup(id, key) {
   if (id == null) return;
-  const amount = topups.value[id];
+  const st = ensureTopup(key);
+  const amount = st.amount;
   if (!amount || amount <= 0) return;
   const value = Math.round(amount);
   try {
-    await apiPost(`/admin/drivers/${id}/add-balance`, {
+    await addDriverBalance(id, {
       amount: value,
-      note: 'Admin topup'
+      note: st.bucket === 'cash' ? 'Admin: naqd balans' : 'Admin: promo kredit',
+      bucket: st.bucket === 'cash' ? 'cash' : 'promo'
     });
-    topups.value[id] = null;
+    st.amount = null;
+    st.bucket = 'promo';
     await load();
   } catch (e) {
     console.error(e);
@@ -175,6 +321,10 @@ function normalizeDriver(d, idx) {
       'online'
     ]);
   const status = normalizeStatus(statusRaw);
+  const bal = normalizeDriverBalances(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
   return {
     ...d,
     ...app,
@@ -182,7 +332,7 @@ function normalizeDriver(d, idx) {
     phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number', 'application_phone', 'phone_text']) ?? '',
     car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',
     plate_number: pickFirst(d, app, ['plate_number', 'plate_text', 'application_plate_text', 'plate', 'plateNo']) ?? '',
-    balance: Number(pickFirst(d, app, ['balance', 'balance_integer', 'wallet_balance', 'driver_balance', 'driver_balance_integer']) ?? 0) || 0,
+    ...bal,
     total_paid: Number(pickFirst(d, app, ['total_paid', 'totalPaid', 'paid_total']) ?? 0) || 0,
     status,
     _topupKey: String(driverId ?? `row-${idx}`),
@@ -224,4 +374,3 @@ function statusClass(status) {
   return 'badge-inactive';
 }
 </script>
-

@@ -5,7 +5,8 @@
       <nav class="nav-links" v-if="authorized">
         <RouterLink to="/">Dashboard</RouterLink>
         <RouterLink to="/drivers">Drivers</RouterLink>
-        <RouterLink to="/payments">Payments</RouterLink>
+        <RouterLink to="/users">Users</RouterLink>
+        <RouterLink to="/payments">To‘lovlar</RouterLink>
         <RouterLink to="/driver-actions">Driver actions</RouterLink>
         <RouterLink to="/map">Map</RouterLink>
       </nav>
