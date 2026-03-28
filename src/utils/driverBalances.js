@@ -1,50 +1,36 @@
 /**
  * Normalize promo vs cash vs legacy single balance from driver payloads.
+ * New API: `promo_balance`, `cash_balance`, `balance` (combined). Keys may be present with 0.
+ * Old API: only `balance` — treat as legacy combined.
  * @param {Record<string, unknown>} root
  * @param {Record<string, unknown>} app
  */
 export function normalizeDriverBalances(root, app) {
-  const promoRaw = pickBalanceField(root, app, [
-    'promo_balance',
-    'promoBalance',
-    'promotional_balance',
-    'internal_promo_balance',
-    'platform_promo_balance',
-    'promo_balance_integer'
-  ]);
-  const cashRaw = pickBalanceField(root, app, [
-    'cash_balance',
-    'cashBalance',
-    'real_balance',
-    'withdrawable_balance',
-    'naqd_balance',
-    'cash_balance_integer'
-  ]);
-  const legacyRaw = pickBalanceField(root, app, [
-    'balance',
-    'balance_integer',
-    'wallet_balance',
-    'driver_balance',
-    'driver_balance_integer',
-    'total_balance'
-  ]);
+  const hasPromoKey = hasOwnKey(root, app, ['promo_balance', 'promoBalance']);
+  const hasCashKey = hasOwnKey(root, app, ['cash_balance', 'cashBalance']);
+  const hasSplit = hasPromoKey || hasCashKey;
 
-  const hasPromoField = promoRaw !== null && promoRaw !== undefined && String(promoRaw).trim() !== '';
-  const hasCashField = cashRaw !== null && cashRaw !== undefined && String(cashRaw).trim() !== '';
-  const hasSplit = hasPromoField || hasCashField;
-
-  const promo = hasPromoField ? toNum(promoRaw) : 0;
-  const cash = hasCashField ? toNum(cashRaw) : 0;
-  const legacy = toNum(legacyRaw);
+  const promo = hasPromoKey ? toNum(getOwn(root, app, ['promo_balance', 'promoBalance'])) : 0;
+  const cash = hasCashKey ? toNum(getOwn(root, app, ['cash_balance', 'cashBalance'])) : 0;
+  const combined = toNum(
+    pickBalanceField(root, app, [
+      'balance',
+      'balance_integer',
+      'wallet_balance',
+      'driver_balance',
+      'driver_balance_integer',
+      'total_balance'
+    ])
+  );
 
   if (hasSplit) {
     return {
       balance_mode: 'split',
       promo_balance: promo,
       cash_balance: cash,
-      legacy_balance: legacy,
-      /** When backend still sends a combined `balance` alongside split fields */
-      legacy_also: legacy
+      combined_balance: combined,
+      legacy_balance: combined,
+      legacy_also: combined
     };
   }
 
@@ -52,9 +38,36 @@ export function normalizeDriverBalances(root, app) {
     balance_mode: 'legacy',
     promo_balance: 0,
     cash_balance: 0,
-    legacy_balance: legacy,
-    legacy_also: legacy
+    combined_balance: combined,
+    legacy_balance: combined,
+    legacy_also: combined
   };
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} a
+ * @param {Record<string, unknown>|null|undefined} b
+ * @param {string[]} keys
+ */
+function hasOwnKey(a, b, keys) {
+  for (const k of keys) {
+    if (a && Object.prototype.hasOwnProperty.call(a, k)) return true;
+    if (b && Object.prototype.hasOwnProperty.call(b, k)) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} a
+ * @param {Record<string, unknown>|null|undefined} b
+ * @param {string[]} keys
+ */
+function getOwn(a, b, keys) {
+  for (const k of keys) {
+    if (a && Object.prototype.hasOwnProperty.call(a, k)) return a[k];
+    if (b && Object.prototype.hasOwnProperty.call(b, k)) return b[k];
+  }
+  return undefined;
 }
 
 /**
@@ -80,42 +93,61 @@ function pickBalanceField(a, b, keys) {
  * @param {unknown} v
  */
 function toNum(v) {
+  if (v == null || v === '') return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
 /**
- * Dashboard summary: split totals when API provides them.
+ * Dashboard summary: totals from GET /admin/dashboard.
  * @param {Record<string, unknown>|null|undefined} summary
  */
 export function normalizeDashboardBalances(summary) {
   if (!summary || typeof summary !== 'object') {
-    return { mode: 'legacy', promo: null, cash: null, legacyTotal: null };
+    return {
+      mode: 'legacy',
+      promo: null,
+      cash: null,
+      combined: null,
+      commissionAccrued: null
+    };
   }
   const s = /** @type {Record<string, unknown>} */ (summary);
   const promo = pickNum(s, [
-    'total_promo_balance',
     'total_promo_balances',
+    'total_promo_balance',
     'promo_balance_total',
     'drivers_promo_balance_total'
   ]);
   const cash = pickNum(s, [
-    'total_cash_balance',
     'total_cash_balances',
+    'total_cash_balance',
     'cash_balance_total',
     'drivers_cash_balance_total'
   ]);
-  const legacy = pickNum(s, ['total_driver_balances', 'total_balances', 'total_balance']);
+  const combined = pickNum(s, ['total_driver_balances', 'total_balances', 'total_balance']);
+  const commissionAccrued = pickNum(s, [
+    'total_internal_commission_accrued',
+    'total_internal_commission',
+    'internal_commission_accrued_total'
+  ]);
 
   if (promo != null || cash != null) {
     return {
       mode: 'split',
       promo: promo ?? 0,
       cash: cash ?? 0,
-      legacyTotal: legacy
+      combined: combined,
+      commissionAccrued
     };
   }
-  return { mode: 'legacy', promo: null, cash: null, legacyTotal: legacy };
+  return {
+    mode: 'legacy',
+    promo: null,
+    cash: null,
+    combined: combined,
+    commissionAccrued
+  };
 }
 
 /**

@@ -1,11 +1,11 @@
 <template>
   <div>
-    <h1>Users</h1>
+    <h1>Foydalanuvchilar</h1>
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>
     <template v-else>
       <p v-if="legalAcceptancesError" class="muted" style="margin-bottom: 0.75rem; color: #b45309;">
-        Legal acceptances: {{ legalAcceptancesError }} (columns show as missing)
+        Legal acceptances: {{ legalAcceptancesError }} (user terms fallback: API terms_accepted)
       </p>
       <div class="filter-row">
         <div>
@@ -13,7 +13,7 @@
             v-model.trim="search"
             type="text"
             class="input"
-            placeholder="Search by phone or name"
+            placeholder="Qidiruv: telefon, ism, telegram ID"
             style="max-width: 280px;"
           />
         </div>
@@ -31,8 +31,11 @@
         <thead>
           <tr>
             <th>ID</th>
+            <th>Telegram</th>
+            <th>Role</th>
             <th>Name</th>
             <th>Phone</th>
+            <th>terms_accepted</th>
             <th>User terms</th>
             <th>Privacy</th>
             <th>Version</th>
@@ -46,8 +49,11 @@
             :class="{ 'table-row-legal-alert': legalSummary(u).missingCodes.length > 0 }"
           >
             <td>{{ u.user_id ?? '—' }}</td>
+            <td>{{ u.telegram_id ?? '—' }}</td>
+            <td>{{ u.role || '—' }}</td>
             <td>{{ u.name || '—' }}</td>
             <td>{{ u.phone || '—' }}</td>
+            <td style="font-size: 0.8rem;">{{ formatTermsAccepted(u.terms_accepted) }}</td>
             <td>
               <span class="badge" :class="legalSummary(u).termsOk ? 'badge-legal-ok' : 'badge-legal-miss'">
                 {{ legalSummary(u).termsOk ? '✅' : '❌' }}
@@ -121,19 +127,35 @@ const legalModalOpen = ref(false);
 const legalModalActorId = ref(null);
 const legalModalTitle = ref('Acceptance history');
 
+/**
+ * Merge /admin/users `terms_accepted` with acceptances list when needed.
+ * @param {object} u
+ */
 function legalSummary(u) {
-  return legalSummaryForActor(acceptanceMap.value, 'user', u.user_id, legalCodes);
+  const base = legalSummaryForActor(acceptanceMap.value, 'user', u.user_id, legalCodes);
+  const ta = u.terms_accepted;
+  const apiTermsOk =
+    ta === true ||
+    ta === 1 ||
+    String(ta).toLowerCase() === 'true' ||
+    String(ta).toLowerCase() === 'yes';
+  if (!base.termsOk && apiTermsOk) {
+    const missing = base.missingCodes.filter((c) => c !== USER_DOC_TERMS);
+    return { ...base, termsOk: true, missingCodes: missing };
+  }
+  return base;
 }
 
 const filteredUsers = computed(() => {
   let list = users.value;
   const q = search.value.trim().toLowerCase();
   if (q) {
-    list = list.filter(
-      (u) =>
-        (u.phone || '').toLowerCase().includes(q) ||
-        (u.name || '').toLowerCase().includes(q)
-    );
+    list = list.filter((u) => {
+      const phone = (u.phone || '').toLowerCase();
+      const name = (u.name || '').toLowerCase();
+      const tg = String(u.telegram_id ?? '').toLowerCase();
+      return phone.includes(q) || name.includes(q) || tg.includes(q);
+    });
   }
   if (legalFilter.value !== LEGAL_FILTER_ALL) {
     list = list.filter((u) => passesLegalFilter('user', legalSummary(u), legalFilter.value, legalCodes));
@@ -147,6 +169,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
+    /** GET /admin/users — JSON array: id, telegram_id, role, name, phone, terms_accepted, created_at */
     const raw = await apiGet('/admin/users');
     const rows = Array.isArray(raw) ? raw : raw?.users || raw?.items || [];
     users.value = rows.map((row, idx) => normalizeUser(row, idx));
@@ -179,14 +202,32 @@ function closeLegalModal() {
 }
 
 /**
+ * @param {unknown} v
+ */
+function formatTermsAccepted(v) {
+  if (v === true || v === 1) return 'true';
+  if (v === false || v === 0) return 'false';
+  if (v == null) return '—';
+  return String(v);
+}
+
+/**
  * @param {Record<string, unknown>} row
  * @param {number} idx
  */
 function normalizeUser(row, idx) {
   if (!row || typeof row !== 'object') {
-    return { user_id: null, phone: '', name: '', _key: `row-${idx}` };
+    return {
+      user_id: null,
+      telegram_id: null,
+      role: '',
+      phone: '',
+      name: '',
+      terms_accepted: undefined,
+      _key: `row-${idx}`
+    };
   }
-  const userId = pickFirst(row, ['user_id', 'id', 'userId', 'passenger_id', 'customer_id']);
+  const userId = pickFirst(row, ['id', 'user_id', 'userId', 'passenger_id', 'customer_id']);
   const phone = pickFirst(row, ['phone', 'phone_number', 'mobile', 'user_phone']) ?? '';
   const fromFields = pickFirst(row, ['name', 'full_name', 'display_name', 'username', 'first_name']);
   const fromParts = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
@@ -194,8 +235,11 @@ function normalizeUser(row, idx) {
   return {
     ...row,
     user_id: userId,
+    telegram_id: row.telegram_id ?? row.telegramId ?? null,
+    role: row.role != null ? String(row.role) : '',
     phone,
     name,
+    terms_accepted: row.terms_accepted ?? row.termsAccepted,
     _key: String(userId ?? phone ?? `row-${idx}`)
   };
 }

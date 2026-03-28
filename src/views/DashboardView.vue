@@ -26,13 +26,22 @@
           <div class="card">
             <div>Jami naqd balans</div>
             <strong>{{ formatMoney(dashBal.cash) }}</strong>
-            <div class="balance-hint" style="margin-top: 0.35rem;">Haqiqiy pul balansi (integratsiya bo‘yicha).</div>
+            <div class="balance-hint" style="margin-top: 0.35rem;">Haqiqiy pul balansi.</div>
+          </div>
+          <div class="card">
+            <div>Jami haydovchi balansi (promo+naqd)</div>
+            <strong>{{ formatMoney(dashBal.combined ?? summary.total_driver_balances) }}</strong>
+            <div class="balance-hint" style="margin-top: 0.35rem;">API: total_driver_balances</div>
           </div>
         </template>
         <div v-else class="card">
-          <div>Haydovchi balanslari (API, yagona)</div>
-          <strong>{{ formatMoney(dashBal.legacyTotal ?? summary.total_driver_balances) }}</strong>
-          <div class="balance-hint" style="margin-top: 0.35rem;">Promo va naqd alohida kelmagan.</div>
+          <div>Jami haydovchi balansi</div>
+          <strong>{{ formatMoney(dashBal.combined ?? summary.total_driver_balances) }}</strong>
+        </div>
+        <div v-if="dashBal.commissionAccrued != null" class="card">
+          <div>Hisoblangan komissiya (ichki)</div>
+          <strong>{{ formatMoney(dashBal.commissionAccrued) }}</strong>
+          <div class="balance-hint" style="margin-top: 0.35rem;">API: total_internal_commission_accrued</div>
         </div>
         <div class="card">
           <div>Today's trips</div>
@@ -118,7 +127,8 @@ const legalMissingError = ref('');
 const legalStats = computed(() => normalizeLegalStats(legalStatsRaw.value));
 
 const legalMissingRows = computed(() => {
-  const list = unwrapMissingList(legalMissingRaw.value);
+  const raw = legalMissingRaw.value;
+  const list = Array.isArray(raw) ? raw : unwrapMissingList(raw);
   return list.map(normalizeMissingRow).filter(Boolean);
 });
 
@@ -160,15 +170,20 @@ async function loadLegalStats() {
 async function loadLegalMissing() {
   legalMissingLoading.value = true;
   legalMissingError.value = '';
-  try {
-    legalMissingRaw.value = await fetchLegalMissing();
-  } catch (e) {
-    console.error(e);
-    legalMissingError.value = e instanceof Error ? e.message : 'Failed to load legal issues';
-    legalMissingRaw.value = null;
-  } finally {
-    legalMissingLoading.value = false;
+  const merged = [];
+  let lastErr = '';
+  for (const actorType of ['user', 'driver']) {
+    try {
+      const data = await fetchLegalMissing(actorType);
+      merged.push(...unwrapMissingList(data));
+    } catch (e) {
+      console.error(e);
+      lastErr = e instanceof Error ? e.message : 'Failed to load legal issues';
+    }
   }
+  legalMissingRaw.value = merged;
+  if (merged.length === 0 && lastErr) legalMissingError.value = lastErr;
+  legalMissingLoading.value = false;
 }
 
 const formatMoney = (amount) => {

@@ -1,6 +1,7 @@
 import { apiGet } from '../api.js';
 
-const LEGAL_PREFIX = '/v1/admin/legal';
+/** Same host as /admin/dashboard — no /v1 prefix (Go API admin routes). */
+const LEGAL_PREFIX = '/admin/legal';
 
 /**
  * @returns {Promise<unknown>}
@@ -10,15 +11,23 @@ export function fetchLegalStats() {
 }
 
 /**
+ * @param {string} [queryString] optional e.g. "driver_id=1" (without leading ?)
  * @returns {Promise<unknown>}
  */
-export function fetchLegalAcceptances() {
-  return apiGet(`${LEGAL_PREFIX}/acceptances`);
+export function fetchLegalAcceptances(queryString = '') {
+  const q = queryString
+    ? queryString.startsWith('?')
+      ? queryString
+      : `?${queryString}`
+    : '';
+  return apiGet(`${LEGAL_PREFIX}/acceptances${q}`);
 }
 
 /**
+ * @param {'user'|'driver'} [actorType]
  * @returns {Promise<unknown>}
  */
-export function fetchLegalMissing() {
-  return apiGet(`${LEGAL_PREFIX}/missing`);
+export function fetchLegalMissing(actorType) {
+  const q = actorType ? `?actor_type=${encodeURIComponent(actorType)}` : '';
+  return apiGet(`${LEGAL_PREFIX}/missing${q}`);
 }

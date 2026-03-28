@@ -1,17 +1,21 @@
 import { apiGet, apiPost } from '../api.js';
 
 /**
+ * POST /admin/drivers/:id/add-balance
+ * - Default / cash: { amount, note } — bucket omitted (API treats as cash top-up).
+ * - Promo: { amount, note, bucket: "promo" } — promotional credit only.
+ *
  * @param {number|string} driverId
  * @param {{ amount: number, note?: string, bucket?: 'promo'|'cash' }} opts
  */
 export async function addDriverBalance(driverId, opts) {
-  const bucket = opts.bucket === 'cash' ? 'cash' : 'promo';
   const body = {
     amount: opts.amount,
-    note: opts.note || undefined,
-    bucket,
-    balance_type: bucket
+    note: opts.note || undefined
   };
+  if (opts.bucket === 'promo') {
+    body.bucket = 'promo';
+  }
   await apiPost(`/admin/drivers/${driverId}/add-balance`, body);
 }
 

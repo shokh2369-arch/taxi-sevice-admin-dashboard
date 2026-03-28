@@ -81,13 +81,17 @@
                 <span class="badge badge-cash">Naqd</span>
                 <span>{{ formatMoney(d.cash_balance) }}</span>
               </div>
+              <div class="balance-stack-row" style="margin-top: 0.25rem;">
+                <span class="muted" style="font-size: 0.72rem;">Jami</span>
+                <span>{{ formatMoney(d.combined_balance) }}</span>
+              </div>
             </div>
             <div v-else class="balance-stack">
-              <div>{{ formatMoney(d.legacy_balance) }}</div>
-              <div class="balance-hint">Yagona balans (promo/naqd ajratilmagan)</div>
+              <div>{{ formatMoney(d.combined_balance) }}</div>
+              <div class="balance-hint">Eski API: faqat yagona balans maydoni</div>
             </div>
           </td>
-          <td>{{ formatMoney(d.total_paid) }}</td>
+          <td>{{ formatMoney(d.internal_commission_display) }}</td>
           <td>
             <span class="badge" :class="statusClass(d.status)">
               {{ d.status || 'UNKNOWN' }}
@@ -117,8 +121,8 @@
           <td @click.stop>
             <div class="balance-stack" style="min-width: 9rem;">
               <select v-model="ensureTopup(d._topupKey).bucket" class="input" style="width: 100%; margin-bottom: 0.35rem; font-size: 0.75rem;">
-                <option value="promo">Promo kredit</option>
                 <option value="cash">Naqd balans</option>
+                <option value="promo">Promo kredit</option>
               </select>
               <input
                 type="number"
@@ -158,6 +162,7 @@ import { fetchLegalAcceptances } from '../api/legal.js';
 import { driverDisplayName } from '../utils/driverDisplayName';
 import LegalAcceptanceModal from '../components/LegalAcceptanceModal.vue';
 import { normalizeDriverBalances } from '../utils/driverBalances.js';
+import { pickDriverInternalCommission } from '../utils/driverCommission.js';
 import {
   DRIVER_DOC_PRIVACY,
   DRIVER_DOC_TERMS,
@@ -274,7 +279,7 @@ function goToDriver(id) {
  */
 function ensureTopup(key) {
   if (!topupState[key]) {
-    topupState[key] = { amount: null, bucket: 'promo' };
+    topupState[key] = { amount: null, bucket: 'cash' };
   }
   return topupState[key];
 }
@@ -292,11 +297,11 @@ async function submitTopup(id, key) {
   try {
     await addDriverBalance(id, {
       amount: value,
-      note: st.bucket === 'cash' ? 'Admin: naqd balans' : 'Admin: promo kredit',
-      bucket: st.bucket === 'cash' ? 'cash' : 'promo'
+      note: st.bucket === 'promo' ? 'Admin: promo kredit' : 'Admin: naqd balans',
+      bucket: st.bucket === 'promo' ? 'promo' : 'cash'
     });
     st.amount = null;
-    st.bucket = 'promo';
+    st.bucket = 'cash';
     await load();
   } catch (e) {
     console.error(e);
@@ -325,6 +330,10 @@ function normalizeDriver(d, idx) {
     /** @type {Record<string, unknown>} */ (d),
     /** @type {Record<string, unknown>} */ (app)
   );
+  const internal_commission_display = pickDriverInternalCommission(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
   return {
     ...d,
     ...app,
@@ -333,6 +342,7 @@ function normalizeDriver(d, idx) {
     car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',
     plate_number: pickFirst(d, app, ['plate_number', 'plate_text', 'application_plate_text', 'plate', 'plateNo']) ?? '',
     ...bal,
+    internal_commission_display,
     total_paid: Number(pickFirst(d, app, ['total_paid', 'totalPaid', 'paid_total']) ?? 0) || 0,
     status,
     _topupKey: String(driverId ?? `row-${idx}`),

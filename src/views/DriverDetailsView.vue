@@ -31,16 +31,19 @@
             Faqat haqiqiy pul oqimi bo‘lsa ko‘rinadi; bank/Click orqali to‘lov integratsiyasi yo‘q bo‘lsa, odatda 0.
           </p>
         </div>
+        <p style="margin-top: 0.75rem;">
+          <strong>Jami (promo + naqd):</strong> {{ formatMoney(driver.combined_balance) }}
+        </p>
       </template>
       <template v-else>
-        <p><strong>Balans (API, yagona):</strong> {{ formatMoney(driver.legacy_balance) }}</p>
+        <p><strong>Balans (API):</strong> {{ formatMoney(driver.combined_balance) }}</p>
         <p class="balance-hint" style="margin-top: 0.35rem;">
-          Promo va naqd alohida kelmagan. Backend yangilanganda promo / naqd alohida ko‘rsatiladi.
+          Eski API: faqat yagona balans maydoni (promo/naqd ajratilmagan).
         </p>
       </template>
 
       <p style="margin-top: 0.75rem;">
-        <strong>Jami komissiya (ichki hisob):</strong> {{ formatMoney(driver.total_paid) }}
+        <strong>Jami komissiya (ichki hisob):</strong> {{ formatMoney(driver.internal_commission_display) }}
       </p>
       <p class="balance-hint" style="margin-top: 0.25rem;">
         Bank o‘tkazmasi yoki mijoz to‘lovi bilan aralashmasin — ichki hisoblangan komissiya.
@@ -60,8 +63,8 @@
       </p>
       <label class="muted" style="display: block; margin-bottom: 0.35rem;">Balans turi</label>
       <select v-model="topupBucket" class="input" style="max-width: 220px; margin-bottom: 0.75rem;">
-        <option value="promo">Promo kredit qo‘shish</option>
         <option value="cash">Naqd balans qo‘shish</option>
+        <option value="promo">Promo kredit qo‘shish</option>
       </select>
       <div>
         <input
@@ -185,6 +188,7 @@ import { apiGet } from '../api';
 import { addDriverBalance, fetchDriverLedger } from '../api/driverBalance.js';
 import { driverDisplayName } from '../utils/driverDisplayName';
 import { normalizeDriverBalances } from '../utils/driverBalances.js';
+import { pickDriverInternalCommission } from '../utils/driverCommission.js';
 import {
   ledgerBucketLabel,
   ledgerEntryLabel,
@@ -200,7 +204,7 @@ const driver = ref(null);
 const payments = ref([]);
 const amount = ref(null);
 const note = ref('');
-const topupBucket = ref('promo');
+const topupBucket = ref('cash');
 const loading = ref(true);
 const error = ref('');
 
@@ -333,12 +337,12 @@ async function add() {
   try {
     await addDriverBalance(id, {
       amount: value,
-      note: note.value || (topupBucket.value === 'cash' ? 'Admin: naqd' : 'Admin: promo'),
-      bucket: topupBucket.value === 'cash' ? 'cash' : 'promo'
+      note: note.value || (topupBucket.value === 'promo' ? 'Admin: promo' : 'Admin: naqd'),
+      bucket: topupBucket.value === 'promo' ? 'promo' : 'cash'
     });
     amount.value = null;
     note.value = '';
-    topupBucket.value = 'promo';
+    topupBucket.value = 'cash';
     await load();
   } catch (e) {
     console.error(e);
@@ -351,10 +355,15 @@ function normalizeDriver(d) {
     /** @type {Record<string, unknown>} */ (d),
     /** @type {Record<string, unknown>} */ (app)
   );
+  const internal_commission_display = pickDriverInternalCommission(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
   return {
     ...d,
     ...app,
     ...bal,
+    internal_commission_display,
     driver_id: pickFirst(d, app, ['driver_id', 'id', 'driverId']),
     phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number', 'application_phone', 'phone_text']) ?? '',
     car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',
