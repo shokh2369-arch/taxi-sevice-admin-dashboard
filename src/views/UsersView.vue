@@ -136,11 +136,12 @@ const legalModalActorId = ref(null);
 const legalModalTitle = ref('Acceptance history');
 
 /**
- * Merge /admin/users `terms_accepted` with acceptances list when needed.
+ * `legal_acceptances` is source of truth. Legacy `terms_accepted` only when acceptances API failed to load.
  * @param {object} u
  */
 function legalSummary(u) {
   const base = legalSummaryForActor(acceptanceMap.value, 'user', u.user_id, legalCodes);
+  if (!legalAcceptancesError.value) return base;
   const ta = u.terms_accepted;
   const apiTermsOk =
     ta === true ||

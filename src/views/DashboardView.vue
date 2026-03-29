@@ -76,23 +76,23 @@
       <div v-else class="card-grid">
         <div class="card">
           <div>Users accepted (legal)</div>
-          <strong>{{ fmtCount(legalStats.totalUsersAccepted) }}</strong>
+          <strong>{{ fmtCount(legalStatsDisplay.totalUsersAccepted) }}</strong>
         </div>
         <div class="card">
           <div>Drivers accepted (legal)</div>
-          <strong>{{ fmtCount(legalStats.totalDriversAccepted) }}</strong>
+          <strong>{{ fmtCount(legalStatsDisplay.totalDriversAccepted) }}</strong>
         </div>
         <div class="card">
           <div>Users missing legal</div>
           <strong>
-            <span v-if="legalStats.usersMissingLegal != null" class="badge badge-legal-miss">{{ legalStats.usersMissingLegal }}</span>
+            <span v-if="legalStatsDisplay.usersMissingLegal != null" class="badge badge-legal-miss">{{ legalStatsDisplay.usersMissingLegal }}</span>
             <span v-else>—</span>
           </strong>
         </div>
         <div class="card">
           <div>Drivers missing legal</div>
           <strong>
-            <span v-if="legalStats.driversMissingLegal != null" class="badge badge-legal-miss">{{ legalStats.driversMissingLegal }}</span>
+            <span v-if="legalStatsDisplay.driversMissingLegal != null" class="badge badge-legal-miss">{{ legalStatsDisplay.driversMissingLegal }}</span>
             <span v-else>—</span>
           </strong>
         </div>
@@ -127,7 +127,7 @@
           <tr v-for="(row, i) in legalMissingRows" :key="`${row.actor_type}-${row.actor_id}-${i}`">
             <td>{{ row.actor_id }}</td>
             <td>{{ row.actor_type }}</td>
-            <td>{{ row.missing_documents.join(', ') || '—' }}</td>
+            <td>{{ row.missingLabel || (row.missing_documents && row.missing_documents.length ? row.missing_documents.join(', ') : '—') }}</td>
             <td>
               <span class="badge badge-legal-miss">Missing</span>
             </td>
@@ -143,7 +143,7 @@ import { computed, onMounted, ref } from 'vue';
 import { apiGet, API_BASE } from '../api';
 import { isLegalAllRoutes404 } from '../utils/legalUi.js';
 import { fetchLegalStats, fetchLegalMissing } from '../api/legal.js';
-import { normalizeLegalStats, normalizeMissingRow, unwrapMissingList } from '../utils/legalStatus.js';
+import { normalizeLegalStats, normalizeMissingRow, unwrapMissingList, unwrapStatsPayload } from '../utils/legalStatus.js';
 import { aggregateBalancesFromDriversPayload, normalizeDashboardBalances } from '../utils/driverBalances.js';
 
 const apiBaseDisplay = API_BASE;
@@ -163,6 +163,23 @@ const legalMissingLoading = ref(true);
 const legalMissingError = ref('');
 
 const legalStats = computed(() => normalizeLegalStats(legalStatsRaw.value));
+
+/** When the API returns any numeric legal stat, show 0 for omitted keys instead of em dash (partial payloads). */
+const legalStatsDisplay = computed(() => {
+  const s = legalStats.value;
+  if (legalStatsRaw.value == null) return s;
+  const parts = [s.totalUsersAccepted, s.totalDriversAccepted, s.usersMissingLegal, s.driversMissingLegal];
+  if (!parts.some((x) => x != null)) return s;
+  const flat = unwrapStatsPayload(legalStatsRaw.value);
+  const looksEmpty = flat && typeof flat === 'object' && Object.keys(flat).length === 0;
+  if (looksEmpty) return s;
+  return {
+    totalUsersAccepted: s.totalUsersAccepted ?? 0,
+    totalDriversAccepted: s.totalDriversAccepted ?? 0,
+    usersMissingLegal: s.usersMissingLegal ?? 0,
+    driversMissingLegal: s.driversMissingLegal ?? 0
+  };
+});
 
 const legalMissingRows = computed(() => {
   const raw = legalMissingRaw.value;

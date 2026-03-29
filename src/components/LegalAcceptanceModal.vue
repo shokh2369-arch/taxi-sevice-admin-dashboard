@@ -23,9 +23,9 @@
             <tbody>
               <tr v-for="(r, i) in rows" :key="i">
                 <td>{{ r.document_code }}</td>
-                <td>{{ r.version ?? '—' }}</td>
+                <td>{{ r.version_display ?? '—' }}</td>
                 <td>{{ formatDate(r.accepted_at) }}</td>
-                <td>{{ r.source ?? '—' }}</td>
+                <td>{{ r.source ?? r.user_agent ?? '—' }}</td>
                 <td>{{ r.ip_address ?? '—' }}</td>
               </tr>
             </tbody>
