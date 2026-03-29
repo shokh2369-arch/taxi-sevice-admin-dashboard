@@ -2,8 +2,7 @@
   <div>
     <h1>To‘lovlar / ichki harakatlar</h1>
     <p class="balance-hint" style="margin: 0 0 1rem;">
-      Bu sahifa bank yoki Click orqali mijoz to‘lovini anglatmaydi. Ko‘rinadigan summalar ichki hisob-kitob va
-      hisoblangan komissiya uchun; hozirgi bosqichda komissiya promo balans orqali aks ettirilishi mumkin.
+      Ichki hisob-kitob va hisoblangan komissiya. Promo kredit real pul emas va alohida; komissiya aks ettirish promo ichki balans orqali bo‘lishi mumkin.
     </p>
     <div v-if="loading">Loading...</div>
     <div v-else-if="error" style="color: red;">{{ error }}</div>

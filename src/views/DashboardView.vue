@@ -21,7 +21,7 @@
           <div class="card">
             <div>Jami promo balans</div>
             <strong>{{ formatMoney(cardBalances.promo) }}</strong>
-            <div class="balance-hint" style="margin-top: 0.35rem;">Platforma krediti; naqdlashtirilmaydi.</div>
+            <div class="balance-hint" style="margin-top: 0.35rem;">Promo kredit — real pul emas; platforma ichida; naqdlashtirilmaydi.</div>
           </div>
           <div class="card">
             <div>Jami naqd balans</div>

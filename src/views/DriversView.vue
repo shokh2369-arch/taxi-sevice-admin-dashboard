@@ -84,6 +84,17 @@
                 <span class="badge badge-promo">Promo</span>
                 <span>{{ formatMoney(d.promo_balance) }}</span>
               </div>
+              <div v-if="d.promoProgram?.hasBackendProgress" class="balance-hint" style="font-size: 0.7rem; margin-top: 0.15rem;">
+                Safar bonusi: {{ d.promoProgram.progressLabel }}
+              </div>
+              <template v-if="d.referralDisplay?.hasProgress">
+                <div v-if="d.referralDisplay.tripsLabel" class="balance-hint" style="font-size: 0.7rem; margin-top: 0.1rem;">
+                  Taklif: {{ d.referralDisplay.tripsLabel }}
+                </div>
+                <div v-if="d.referralDisplay.rewardStatusLabel" class="balance-hint" style="font-size: 0.7rem; margin-top: 0.05rem;">
+                  {{ d.referralDisplay.rewardStatusLabel }}
+                </div>
+              </template>
               <div class="balance-stack-row" style="margin-top: 0.2rem;">
                 <span class="badge badge-cash">Naqd</span>
                 <span>{{ formatMoney(d.cash_balance) }}</span>
@@ -183,6 +194,8 @@ import {
   LEGAL_FILTER_PRIVACY,
   unwrapList
 } from '../utils/legalStatus.js';
+import { normalizePromoProgramFromSources } from '../utils/driverPromoProgram.js';
+import { normalizeReferralFromSources } from '../utils/driverReferralProgram.js';
 
 const router = useRouter();
 const drivers = ref([]);
@@ -342,9 +355,19 @@ function normalizeDriver(d, idx) {
     /** @type {Record<string, unknown>} */ (d),
     /** @type {Record<string, unknown>} */ (app)
   );
+  const promoProgram = normalizePromoProgramFromSources(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
+  const referralDisplay = normalizeReferralFromSources(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
   return {
     ...d,
     ...app,
+    promoProgram,
+    referralDisplay,
     driver_id: driverId,
     phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number', 'application_phone', 'phone_text']) ?? '',
     car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',

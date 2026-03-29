@@ -18,7 +18,7 @@
           </p>
           <p style="margin: 0; font-size: 1.05rem;">{{ formatMoney(driver.promo_balance) }}</p>
           <p class="balance-hint" style="margin: 0.35rem 0 0;">
-            Real pul emas. Faqat platforma ichida ishlatiladi. Naqdlashtirilmaydi.
+            Promo kredit real pul emas va naqdlashtirilmaydi. Ichki balans — faqat platforma ichida ishlatiladi.
           </p>
         </div>
         <div class="card-balance-split">
@@ -28,7 +28,7 @@
           </p>
           <p style="margin: 0; font-size: 1.05rem;">{{ formatMoney(driver.cash_balance) }}</p>
           <p class="balance-hint" style="margin: 0.35rem 0 0;">
-            Faqat haqiqiy pul oqimi bo‘lsa ko‘rinadi; bank/Click orqali to‘lov integratsiyasi yo‘q bo‘lsa, odatda 0.
+            Haqiqiy pul (ichki naqd balans). Tashqi to‘lov shlyuzi ulangan bo‘lmasa, odatda 0.
           </p>
         </div>
         <p style="margin-top: 0.75rem;">
@@ -46,13 +46,65 @@
         <strong>Jami komissiya (ichki hisob):</strong> {{ formatMoney(driver.internal_commission_display) }}
       </p>
       <p class="balance-hint" style="margin-top: 0.25rem;">
-        Bank o‘tkazmasi yoki mijoz to‘lovi bilan aralashmasin — ichki hisoblangan komissiya.
+        Ichki hisoblangan komissiya; promo kredit bilan aralashmasin.
       </p>
       <p style="margin-top: 0.75rem;">
         <strong>Holat:</strong>
         <span class="badge" :class="driver.status === 'ACTIVE' ? 'badge-active' : 'badge-inactive'">
           {{ driver.status || 'UNKNOWN' }}
         </span>
+      </p>
+    </div>
+
+    <h2 class="section-title" style="margin-top: 1.5rem;">Promo dasturi</h2>
+    <div class="card">
+      <p class="balance-hint" style="margin: 0 0 0.75rem;">
+        Haydovchi/botda ko‘rinadigan matn (yangi qoida: 20 000 boshlang‘ich + 3 ta safar bonusi):
+      </p>
+      <pre class="promo-program-exact" style="white-space: pre-wrap; margin: 0 0 1rem; font-family: inherit; font-size: 0.92rem; line-height: 1.45;">{{ promoProgramDriverText }}</pre>
+      <ul style="margin: 0 0 1rem 1.1rem; padding: 0; line-height: 1.5;">
+        <li>Boshlang‘ich promo: {{ formatPromoCreditsUz(driver.promoProgram.initialPromo) }}</li>
+        <li>1-safar bonusi: +{{ formatPromoCreditsUz(driver.promoProgram.perTripBonus) }}</li>
+        <li>2-safar bonusi: +{{ formatPromoCreditsUz(driver.promoProgram.perTripBonus) }}</li>
+        <li>3-safar bonusi: +{{ formatPromoCreditsUz(driver.promoProgram.perTripBonus) }}</li>
+        <li>Promo kredit real pul emas</li>
+      </ul>
+      <template v-if="driver.promoProgram.hasBackendProgress">
+        <p style="margin: 0 0 0.35rem;"><strong>🎯 Boshlang‘ich bonus progressi</strong></p>
+        <p class="balance-hint" style="margin: 0 0 0.5rem;">
+          Progress: {{ driver.promoProgram.progressLabel }} · qolgan safar slotlari: {{ driver.promoProgram.remainingTripSlots }}
+        </p>
+        <ul style="margin: 0; padding: 0; list-style: none; line-height: 1.6; font-size: 0.95rem;">
+          <li>{{ driver.promoProgram.completedTripBonuses >= 1 ? '[✔]' : '[ ]' }} 1-safar → +{{ formatPromoCreditsUz(driver.promoProgram.perTripBonus) }}</li>
+          <li>{{ driver.promoProgram.completedTripBonuses >= 2 ? '[✔]' : '[ ]' }} 2-safar → +{{ formatPromoCreditsUz(driver.promoProgram.perTripBonus) }}</li>
+          <li>{{ driver.promoProgram.completedTripBonuses >= 3 ? '[✔]' : '[ ]' }} 3-safar → +{{ formatPromoCreditsUz(driver.promoProgram.perTripBonus) }}</li>
+        </ul>
+      </template>
+      <p v-else class="balance-hint" style="margin: 0.75rem 0 0;">
+        Safar bonusi progressi: API <code>promo_completed_trips</code> / <code>promo_program</code> kabi maydonlar kelganda shu yerda ko‘rinadi.
+      </p>
+      <p v-if="driver.promoProgram.lastBonusLabel" style="margin: 0.75rem 0 0;">
+        {{ driver.promoProgram.lastBonusLabel }}
+      </p>
+    </div>
+
+    <h2 class="section-title" style="margin-top: 1.5rem;">Taklif / referral</h2>
+    <div class="card">
+      <p class="balance-hint" style="margin: 0 0 0.75rem;">
+        Taklif qilgan haydovchi uchun matn (taklif qilingan haydovchi 3 ta tugallangan safar qilgach):
+      </p>
+      <pre class="referral-program-exact" style="white-space: pre-wrap; margin: 0 0 0.75rem; font-family: inherit; font-size: 0.92rem; line-height: 1.45;">{{ driver.referralDisplay.inviterMessage }}</pre>
+      <p class="balance-hint" style="margin: 0 0 0.75rem;">{{ driver.referralDisplay.footnote }}</p>
+      <template v-if="driver.referralDisplay.hasProgress">
+        <p v-if="driver.referralDisplay.tripsLabel" style="margin: 0 0 0.35rem;">
+          <strong>{{ driver.referralDisplay.tripsLabel }}</strong>
+        </p>
+        <p v-if="driver.referralDisplay.rewardStatusLabel" style="margin: 0;">
+          {{ driver.referralDisplay.rewardStatusLabel }}
+        </p>
+      </template>
+      <p v-else class="balance-hint" style="margin: 0.75rem 0 0;">
+        Progress / mukofot holati: API <code>referral_trips_completed</code>, <code>referral_reward_granted</code> yoki <code>referral_program</code> ichida kelganda shu yerda ko‘rinadi.
       </p>
     </div>
 
@@ -128,7 +180,7 @@
 
     <h2 class="section-title">Oylik yig‘indilar</h2>
     <p class="balance-hint" style="margin: -0.5rem 0 0.75rem;">
-      Hozirgi bosqichda komissiya ichki promo balans orqali aks ettirilishi mumkin. Live Click/bank o‘tkazmasi nazarda tutilmagan.
+      Komissiya ichki hisob-kitob; promo kredit alohida va real pul emas. Tashqariga pul yechish sharti emas.
     </p>
     <div class="card" v-if="monthlyTotals.length">
       <table class="table">
@@ -152,7 +204,7 @@
 
     <h2 class="section-title">To‘lovlar / harakatlar</h2>
     <p class="balance-hint" style="margin: -0.5rem 0 0.75rem;">
-      Bu ro‘yxat bank yoki mijoz kartasidan yechimni anglatmaydi — ichki platforma yozuvlari.
+      Ichki platforma yozuvlari; tashqi kartadan yechim yoki naqd chiqarishni anglatmaydi.
     </p>
     <table class="table" v-if="payments.length">
       <thead>
@@ -182,7 +234,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { apiGet } from '../api';
 import { addDriverBalance, fetchDriverLedger } from '../api/driverBalance.js';
@@ -196,6 +248,12 @@ import {
   unwrapLedgerList
 } from '../utils/driverLedger.js';
 import { formatPaymentTypeLabel } from '../utils/paymentLabels.js';
+import {
+  PROMO_PROGRAM_DRIVER_MESSAGE,
+  formatPromoCreditsUz,
+  normalizePromoProgramFromSources
+} from '../utils/driverPromoProgram.js';
+import { normalizeReferralFromSources } from '../utils/driverReferralProgram.js';
 
 const route = useRoute();
 const id = Number(route.params.id);
@@ -212,8 +270,22 @@ const ledgerLoading = ref(false);
 const ledgerRows = ref([]);
 const ledgerUnsupported = ref(false);
 
+/** Light poll so promo balans / safar bonusi yangilanadi (safar tugagach). */
+const REFRESH_MS = 20_000;
+let refreshTimer = 0;
+
+const promoProgramDriverText = PROMO_PROGRAM_DRIVER_MESSAGE;
+
 onMounted(async () => {
   await load();
+  refreshTimer = window.setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    load().catch(() => {});
+  }, REFRESH_MS);
+});
+
+onUnmounted(() => {
+  if (refreshTimer) window.clearInterval(refreshTimer);
 });
 
 async function load() {
@@ -359,11 +431,22 @@ function normalizeDriver(d) {
     /** @type {Record<string, unknown>} */ (d),
     /** @type {Record<string, unknown>} */ (app)
   );
+  const promoProgram = normalizePromoProgramFromSources(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
+  const referralDisplay = normalizeReferralFromSources(
+    /** @type {Record<string, unknown>} */ (d),
+    /** @type {Record<string, unknown>} */ (app)
+  );
+
   return {
     ...d,
     ...app,
     ...bal,
     internal_commission_display,
+    promoProgram,
+    referralDisplay,
     driver_id: pickFirst(d, app, ['driver_id', 'id', 'driverId']),
     phone: pickFirst(d, app, ['phone', 'driver_phone', 'phone_number', 'application_phone', 'phone_text']) ?? '',
     car_model: pickFirst(d, app, ['car_model', 'car_type_model', 'application_car_type_model', 'car', 'carName', 'car_name']) ?? '',
