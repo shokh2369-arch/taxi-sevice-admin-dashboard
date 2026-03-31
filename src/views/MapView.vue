@@ -16,6 +16,7 @@
     </div>
 
     <div v-if="error" style="color: #b91c1c; margin-bottom: 0.75rem;">{{ error }}</div>
+    <div v-if="driverWarning" style="color: #b45309; margin-bottom: 0.25rem;">{{ driverWarning }}</div>
     <div v-if="requestWarning" style="color: #b45309; margin-bottom: 0.75rem;">{{ requestWarning }}</div>
 
     <div class="map-layout">
@@ -78,7 +79,7 @@
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { apiGet } from '../api';
+import { apiGet, API_BASE } from '../api';
 
 const mapEl = ref(null);
 const leafletMap = ref(null);
@@ -100,16 +101,17 @@ const selectedItem = ref(null);
 const nearestList = ref([]);
 let pollTimer = null;
 const requestWarning = ref('');
+const driverWarning = ref('');
 let googleInitFitted = false;
 
 const DRIVER_ENDPOINTS = (
   import.meta.env.VITE_MAP_DRIVER_ENDPOINTS ||
-  '/admin/drivers/live,/admin/drivers,/drivers/live,/drivers'
+  '/admin/map/drivers'
 ).split(',').map((s) => s.trim()).filter(Boolean);
 
 const REQUEST_ENDPOINTS = (
   import.meta.env.VITE_MAP_REQUEST_ENDPOINTS ||
-  '/admin/requests,/admin/ride-requests,/admin/ride-requests/active,/ride-requests,/requests'
+  '/admin/map/ride-requests'
 ).split(',').map((s) => s.trim()).filter(Boolean);
 
 function num(v) {
@@ -117,9 +119,16 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function pickLatLng(row) {
-  const lat = num(row.lat ?? row.latitude ?? row.pickup_lat ?? row.pickupLatitude);
-  const lng = num(row.lng ?? row.lon ?? row.long ?? row.longitude ?? row.pickup_lng ?? row.pickup_lon);
+function pickDriverLatLng(row) {
+  const lat = num(row.last_lat);
+  const lng = num(row.last_lng);
+  if (lat == null || lng == null) return null;
+  return [lat, lng];
+}
+
+function pickRequestLatLng(row) {
+  const lat = num(row.pickup_lat);
+  const lng = num(row.pickup_lng);
   if (lat == null || lng == null) return null;
   return [lat, lng];
 }
@@ -135,7 +144,7 @@ function markerIconLeaflet(color) {
 
 function driverStatusColor(d) {
   const online = Boolean(d.online ?? d.is_online ?? d.active);
-  const hasLive = Boolean(d.live ?? d.has_live ?? (pickLatLng(d) != null));
+  const hasLive = Boolean(d.live ?? d.has_live ?? (pickDriverLatLng(d) != null));
   if (online && hasLive) return '#16a34a';
   if (!online) return '#6b7280';
   return '#dc2626';
@@ -145,8 +154,10 @@ async function firstSuccess(paths) {
   let lastErr = null;
   for (const p of paths) {
     try {
+      console.log('[Map] fetching', `${API_BASE}${p}`);
       return await apiGet(p);
     } catch (e) {
+      console.error('[Map] fetch failed', `${API_BASE}${p}`, e);
       lastErr = e;
     }
   }
@@ -164,7 +175,7 @@ async function firstSuccessOrEmpty(paths) {
 function normalizeDrivers(raw) {
   const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
   return rows.map((d) => {
-    const ll = pickLatLng(d);
+    const ll = pickDriverLatLng(d);
     return {
       ...d,
       driver_id: d.driver_id ?? d.id,
@@ -177,7 +188,7 @@ function normalizeDrivers(raw) {
 function normalizeRequests(raw) {
   const rows = Array.isArray(raw) ? raw : raw?.requests || raw?.ride_requests || [];
   return rows.map((r) => {
-    const ll = pickLatLng(r);
+    const ll = pickRequestLatLng(r);
     return {
       ...r,
       request_id: r.request_id ?? r.id ?? r.trip_id,
@@ -334,6 +345,7 @@ function renderMarkers(drivers, requests) {
 async function refreshData() {
   error.value = '';
   requestWarning.value = '';
+  driverWarning.value = '';
   try {
     const driversRaw = await firstSuccess(DRIVER_ENDPOINTS);
     const requestsRaw = await firstSuccessOrEmpty(REQUEST_ENDPOINTS);
@@ -342,8 +354,11 @@ async function refreshData() {
     const requests = normalizeRequests(requestsRaw);
     renderMarkers(drivers, requests);
 
+    if (!drivers.length) {
+      driverWarning.value = 'No drivers online.';
+    }
     if (!requests.length) {
-      requestWarning.value = 'No active ride requests right now.';
+      requestWarning.value = 'No active requests.';
     }
   } catch (e) {
     console.error(e);
