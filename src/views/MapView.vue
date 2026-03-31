@@ -255,12 +255,10 @@ function renderMarkersLeaflet(drivers, requests) {
     m.addTo(requestLayer.value);
   });
 
-  if (drivers.length || requests.length) {
-    const group = L.featureGroup([...driverLayer.value.getLayers(), ...requestLayer.value.getLayers()]);
-    if (group.getLayers().length && !leafletMap.value._initFitted) {
-      leafletMap.value.fitBounds(group.getBounds().pad(0.2));
-      leafletMap.value._initFitted = true;
-    }
+  const layers = [...driverLayer.value.getLayers(), ...requestLayer.value.getLayers()];
+  if (layers.length) {
+    const group = L.featureGroup(layers);
+    leafletMap.value.fitBounds(group.getBounds().pad(0.2));
   }
 }
 
