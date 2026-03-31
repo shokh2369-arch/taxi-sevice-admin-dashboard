@@ -104,15 +104,45 @@ const requestWarning = ref('');
 const driverWarning = ref('');
 let googleInitFitted = false;
 
-const DRIVER_ENDPOINTS = (
-  import.meta.env.VITE_MAP_DRIVER_ENDPOINTS ||
-  '/admin/map/drivers'
-).split(',').map((s) => s.trim()).filter(Boolean);
+function splitEndpoints(csv) {
+  return String(csv || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
-const REQUEST_ENDPOINTS = (
-  import.meta.env.VITE_MAP_REQUEST_ENDPOINTS ||
-  '/admin/map/ride-requests'
-).split(',').map((s) => s.trim()).filter(Boolean);
+function uniq(list) {
+  const out = [];
+  const seen = new Set();
+  for (const x of list) {
+    if (seen.has(x)) continue;
+    seen.add(x);
+    out.push(x);
+  }
+  return out;
+}
+
+// Prefer the new map endpoints first, then env overrides, then legacy fallbacks.
+const DRIVER_ENDPOINTS = uniq([
+  '/map/drivers',
+  '/admin/map/drivers',
+  ...splitEndpoints(import.meta.env.VITE_MAP_DRIVER_ENDPOINTS),
+  '/admin/drivers/live',
+  '/admin/drivers',
+  '/drivers/live',
+  '/drivers'
+]);
+
+const REQUEST_ENDPOINTS = uniq([
+  '/map/ride-requests',
+  '/admin/map/ride-requests',
+  ...splitEndpoints(import.meta.env.VITE_MAP_REQUEST_ENDPOINTS),
+  '/admin/requests',
+  '/admin/ride-requests',
+  '/admin/ride-requests/active',
+  '/ride-requests',
+  '/requests'
+]);
 
 function num(v) {
   const n = Number(v);
@@ -155,7 +185,9 @@ async function firstSuccess(paths) {
   for (const p of paths) {
     try {
       console.log('[Map] fetching', `${API_BASE}${p}`);
-      return await apiGet(p);
+      const data = await apiGet(p);
+      console.log('[Map] success', `${API_BASE}${p}`);
+      return data;
     } catch (e) {
       console.error('[Map] fetch failed', `${API_BASE}${p}`, e);
       lastErr = e;
@@ -432,7 +464,14 @@ onMounted(async () => {
     if (GOOGLE_KEY) {
       await initGoogleMaps();
     } else {
-      leafletMap.value = L.map(mapEl.value).setView([41.3111, 69.2797], 12);
+      leafletMap.value = L.map(mapEl.value, {
+        zoomControl: true,
+        scrollWheelZoom: true,
+        touchZoom: true,
+        doubleClickZoom: true,
+        boxZoom: true,
+        keyboard: true
+      }).setView([41.3111, 69.2797], 12);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors'
@@ -440,6 +479,11 @@ onMounted(async () => {
 
       driverLayer.value = L.layerGroup().addTo(leafletMap.value);
       requestLayer.value = L.layerGroup().addTo(leafletMap.value);
+
+      // Ensure zoom interactions are enabled even if Leaflet defaults were changed elsewhere.
+      leafletMap.value.scrollWheelZoom?.enable?.();
+      leafletMap.value.touchZoom?.enable?.();
+      leafletMap.value.doubleClickZoom?.enable?.();
     }
 
     await refreshData();
