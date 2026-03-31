@@ -138,40 +138,30 @@
       </div>
     </div>
 
-    <h2 class="section-title" style="margin-top: 1.5rem;">Ichki balans to‘g‘rilash (admin)</h2>
+    <h2 class="section-title" style="margin-top: 1.5rem;">Balans ayirish (admin)</h2>
     <div class="card">
       <p class="balance-hint" style="margin: 0 0 0.75rem;">
-        Bu ichki balansni qo‘lda tuzatish uchun. Musbat qiymat — oshirish, manfiy qiymat — kamaytirish. Promo / naqd
-        bo‘linishi backend qoidalari bo‘yicha hisoblanadi.
+        Bu funksiya faqat haqiqiy naqd balansdan ayiradi. Promo balans hech qachon kamaytirilmaydi. Avval qo‘shilgan
+        naqd balansen bir qismini qaytarish kerak bo‘lganda foydalaning.
       </p>
       <div style="margin-bottom: 0.5rem;">
-        <label class="muted" style="display: block; margin-bottom: 0.25rem;">O‘zgarish (so‘m)</label>
+        <label class="muted" style="display: block; margin-bottom: 0.25rem;">Ayiriladigan summa (so‘m)</label>
         <input
-          v-model.number="correctionAmount"
+          v-model.number="deductionAmount"
           type="number"
           class="input"
-          placeholder="Masalan: 50000 yoki -25000"
+          placeholder="Masalan: 5000"
           style="max-width: 260px;"
         />
       </div>
       <div style="margin-bottom: 0.5rem;">
         <label class="muted" style="display: block; margin-bottom: 0.25rem;">Sabab</label>
         <input
-          v-model="correctionNote"
+          v-model="deductionReason"
           type="text"
           class="input"
-          placeholder="Masalan: noto‘g‘ri kiritilgan balansni to‘g‘rilash"
+          placeholder="Masalan: refund correction"
           style="max-width: 360px;"
-        />
-      </div>
-      <div style="margin-bottom: 0.75rem;">
-        <label class="muted" style="display: block; margin-bottom: 0.25rem;">Admin ID</label>
-        <input
-          v-model.number="correctionAdminId"
-          type="number"
-          class="input"
-          placeholder="Admin ID (majburiy)"
-          style="max-width: 200px;"
         />
       </div>
       <div>
@@ -179,13 +169,13 @@
           type="button"
           class="button button-secondary"
           style="margin-right: 0.5rem;"
-          :disabled="isApplyingCorrection || correctionAmount == null || correctionAmount === 0 || correctionAdminId == null || correctionAdminId <= 0"
-          @click="applyCorrection"
+          :disabled="isApplyingDeduction || deductionAmount == null || deductionAmount <= 0"
+          @click="applyDeduction"
         >
-          To‘g‘rilash
+          Balans ayirish
         </button>
-        <span v-if="correctionMessage" class="balance-hint" style="margin-left: 0.25rem;">
-          {{ correctionMessage }}
+        <span v-if="deductionMessage" class="balance-hint" style="margin-left: 0.25rem;">
+          {{ deductionMessage }}
         </span>
       </div>
     </div>
@@ -289,7 +279,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { apiGet } from '../api';
-import { addDriverBalance, adjustDriverBalance, fetchDriverLedger } from '../api/driverBalance.js';
+import { addDriverBalance, deductDriverBalance, fetchDriverLedger } from '../api/driverBalance.js';
 import { driverDisplayName } from '../utils/driverDisplayName';
 import { normalizeDriverBalances } from '../utils/driverBalances.js';
 import { pickDriverInternalCommission } from '../utils/driverCommission.js';
@@ -315,11 +305,10 @@ const payments = ref([]);
 const amount = ref(null);
 const note = ref('');
 const topupBucket = ref('cash');
-const correctionAmount = ref(null);
-const correctionNote = ref('');
-const correctionAdminId = ref(null);
-const isApplyingCorrection = ref(false);
-const correctionMessage = ref('');
+const deductionAmount = ref(null);
+const deductionReason = ref('');
+const isApplyingDeduction = ref(false);
+const deductionMessage = ref('');
 const loading = ref(true);
 const error = ref('');
 
@@ -478,28 +467,25 @@ async function add() {
   }
 }
 
-async function applyCorrection() {
-  if (correctionAmount.value == null || correctionAmount.value === 0) return;
-  if (correctionAdminId.value == null || correctionAdminId.value <= 0) return;
-  const value = Math.round(correctionAmount.value);
-  const adminId = Math.round(correctionAdminId.value);
-  isApplyingCorrection.value = true;
-  correctionMessage.value = '';
+async function applyDeduction() {
+  if (deductionAmount.value == null || deductionAmount.value <= 0) return;
+  const value = Math.round(deductionAmount.value);
+  isApplyingDeduction.value = true;
+  deductionMessage.value = '';
   try {
-    await adjustDriverBalance(id, {
+    await deductDriverBalance(id, {
       amount: value,
-      reason: correctionNote.value || undefined,
-      admin_id: adminId
+      reason: deductionReason.value || undefined
     });
-    correctionAmount.value = null;
-    correctionNote.value = '';
-    correctionMessage.value = "Balans muvaffaqiyatli to‘g‘rilandi.";
+    deductionAmount.value = null;
+    deductionReason.value = '';
+    deductionMessage.value = 'Naqd balansdan summa muvaffaqiyatli ayirildi.';
     await load();
   } catch (e) {
     console.error(e);
-    correctionMessage.value = 'Balansni to‘g‘rilashda xatolik yuz berdi.';
+    deductionMessage.value = 'Balans ayirishda xatolik yuz berdi.';
   } finally {
-    isApplyingCorrection.value = false;
+    isApplyingDeduction.value = false;
   }
 }
 

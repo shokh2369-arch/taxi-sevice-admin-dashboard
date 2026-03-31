@@ -31,6 +31,17 @@ export async function adjustDriverBalance(driverId, body) {
 }
 
 /**
+ * POST /admin/drivers/:id/deduct-balance
+ * Dedicated real cash balance deduction (amount > 0).
+ *
+ * @param {number|string} driverId
+ * @param {{ amount: number, reason?: string }} body
+ */
+export async function deductDriverBalance(driverId, body) {
+  return apiPost(`/admin/drivers/${driverId}/deduct-balance`, body);
+}
+
+/**
  * Try common ledger paths; returns JSON or null if none succeed.
  * @param {number|string} driverId
  */
