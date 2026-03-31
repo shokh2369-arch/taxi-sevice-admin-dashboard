@@ -20,6 +20,17 @@ export async function addDriverBalance(driverId, opts) {
 }
 
 /**
+ * POST /admin/drivers/:id/adjust-balance
+ * Manual admin correction: signed delta applied to total balance.
+ *
+ * @param {number|string} driverId
+ * @param {{ amount: number, reason?: string, admin_id: number }} body
+ */
+export async function adjustDriverBalance(driverId, body) {
+  await apiPost(`/admin/drivers/${driverId}/adjust-balance`, body);
+}
+
+/**
  * Try common ledger paths; returns JSON or null if none succeed.
  * @param {number|string} driverId
  */

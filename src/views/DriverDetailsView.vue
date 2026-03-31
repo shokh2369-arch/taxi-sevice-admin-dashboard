@@ -138,6 +138,58 @@
       </div>
     </div>
 
+    <h2 class="section-title" style="margin-top: 1.5rem;">Ichki balans to‘g‘rilash (admin)</h2>
+    <div class="card">
+      <p class="balance-hint" style="margin: 0 0 0.75rem;">
+        Bu ichki balansni qo‘lda tuzatish uchun. Musbat qiymat — oshirish, manfiy qiymat — kamaytirish. Promo / naqd
+        bo‘linishi backend qoidalari bo‘yicha hisoblanadi.
+      </p>
+      <div style="margin-bottom: 0.5rem;">
+        <label class="muted" style="display: block; margin-bottom: 0.25rem;">O‘zgarish (so‘m)</label>
+        <input
+          v-model.number="correctionAmount"
+          type="number"
+          class="input"
+          placeholder="Masalan: 50000 yoki -25000"
+          style="max-width: 260px;"
+        />
+      </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label class="muted" style="display: block; margin-bottom: 0.25rem;">Sabab</label>
+        <input
+          v-model="correctionNote"
+          type="text"
+          class="input"
+          placeholder="Masalan: noto‘g‘ri kiritilgan balansni to‘g‘rilash"
+          style="max-width: 360px;"
+        />
+      </div>
+      <div style="margin-bottom: 0.75rem;">
+        <label class="muted" style="display: block; margin-bottom: 0.25rem;">Admin ID</label>
+        <input
+          v-model.number="correctionAdminId"
+          type="number"
+          class="input"
+          placeholder="Admin ID (majburiy)"
+          style="max-width: 200px;"
+        />
+      </div>
+      <div>
+        <button
+          type="button"
+          class="button button-secondary"
+          style="margin-right: 0.5rem;"
+          :disabled="isApplyingCorrection || correctionAmount == null || correctionAmount === 0 || correctionAdminId == null || correctionAdminId <= 0"
+          @click="applyCorrection"
+        >
+          To‘g‘rilash
+        </button>
+        <span v-if="correctionMessage" class="balance-hint" style="margin-left: 0.25rem;">
+          {{ correctionMessage }}
+        </span>
+      </div>
+    </div>
+
     <h2 class="section-title">Balans journali (ledger)</h2>
     <div v-if="ledgerLoading" class="muted">Yuklanmoqda…</div>
     <p v-else-if="ledgerUnsupported" class="card muted" style="margin: 0;">
@@ -237,7 +289,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { apiGet } from '../api';
-import { addDriverBalance, fetchDriverLedger } from '../api/driverBalance.js';
+import { addDriverBalance, adjustDriverBalance, fetchDriverLedger } from '../api/driverBalance.js';
 import { driverDisplayName } from '../utils/driverDisplayName';
 import { normalizeDriverBalances } from '../utils/driverBalances.js';
 import { pickDriverInternalCommission } from '../utils/driverCommission.js';
@@ -263,6 +315,11 @@ const payments = ref([]);
 const amount = ref(null);
 const note = ref('');
 const topupBucket = ref('cash');
+const correctionAmount = ref(null);
+const correctionNote = ref('');
+const correctionAdminId = ref(null);
+const isApplyingCorrection = ref(false);
+const correctionMessage = ref('');
 const loading = ref(true);
 const error = ref('');
 
@@ -404,7 +461,7 @@ const monthlyTotals = computed(() => {
 });
 
 async function add() {
-  if (!amount.value || amount.value <= 0) return;
+  if (amount.value == null || amount.value <= 0) return;
   const value = Math.round(amount.value);
   try {
     await addDriverBalance(id, {
@@ -418,6 +475,31 @@ async function add() {
     await load();
   } catch (e) {
     console.error(e);
+  }
+}
+
+async function applyCorrection() {
+  if (correctionAmount.value == null || correctionAmount.value === 0) return;
+  if (correctionAdminId.value == null || correctionAdminId.value <= 0) return;
+  const value = Math.round(correctionAmount.value);
+  const adminId = Math.round(correctionAdminId.value);
+  isApplyingCorrection.value = true;
+  correctionMessage.value = '';
+  try {
+    await adjustDriverBalance(id, {
+      amount: value,
+      reason: correctionNote.value || undefined,
+      admin_id: adminId
+    });
+    correctionAmount.value = null;
+    correctionNote.value = '';
+    correctionMessage.value = "Balans muvaffaqiyatli to‘g‘rilandi.";
+    await load();
+  } catch (e) {
+    console.error(e);
+    correctionMessage.value = 'Balansni to‘g‘rilashda xatolik yuz berdi.';
+  } finally {
+    isApplyingCorrection.value = false;
   }
 }
 
