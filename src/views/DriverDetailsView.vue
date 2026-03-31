@@ -316,22 +316,10 @@ const ledgerLoading = ref(false);
 const ledgerRows = ref([]);
 const ledgerUnsupported = ref(false);
 
-/** Light poll so promo balans / safar bonusi yangilanadi (safar tugagach). */
-const REFRESH_MS = 20_000;
-let refreshTimer = 0;
-
 const promoProgramDriverText = PROMO_PROGRAM_DRIVER_MESSAGE;
 
 onMounted(async () => {
   await load();
-  refreshTimer = window.setInterval(() => {
-    if (document.visibilityState !== 'visible') return;
-    load().catch(() => {});
-  }, REFRESH_MS);
-});
-
-onUnmounted(() => {
-  if (refreshTimer) window.clearInterval(refreshTimer);
 });
 
 async function load() {
