@@ -138,11 +138,11 @@
       </div>
     </div>
 
-    <h2 class="section-title" style="margin-top: 1.5rem;">Balans ayirish (admin)</h2>
+    <h2 class="section-title" style="margin-top: 1.5rem;">Naqd balansdan ayirish (admin)</h2>
     <div class="card">
       <p class="balance-hint" style="margin: 0 0 0.75rem;">
-        Bu funksiya faqat haqiqiy naqd balansdan ayiradi. Promo balans hech qachon kamaytirilmaydi. Avval qo‘shilgan
-        naqd balansen bir qismini qaytarish kerak bo‘lganda foydalaning.
+        Bu bo‘lim faqat haqiqiy naqd balansni kamaytiradi. Promo balansga tegilmaydi. Avval qo‘shilgan naqd balansning
+        bir qismini qaytarish kerak bo‘lganda foydalaning.
       </p>
       <div style="margin-bottom: 0.5rem;">
         <label class="muted" style="display: block; margin-bottom: 0.25rem;">Ayiriladigan summa (so‘m)</label>
@@ -169,7 +169,13 @@
           type="button"
           class="button button-secondary"
           style="margin-right: 0.5rem;"
-          :disabled="isApplyingDeduction || deductionAmount == null || deductionAmount <= 0"
+          :disabled="
+            isApplyingDeduction ||
+            deductionAmount == null ||
+            deductionAmount <= 0 ||
+            !deductionReason ||
+            !deductionReason.trim()
+          "
           @click="applyDeduction"
         >
           Balans ayirish
@@ -458,6 +464,7 @@ async function add() {
 async function applyDeduction() {
   if (isApplyingDeduction.value) return;
   if (deductionAmount.value == null || deductionAmount.value <= 0) return;
+  if (!deductionReason.value || !deductionReason.value.trim()) return;
   const value = Math.round(deductionAmount.value);
   isApplyingDeduction.value = true;
   deductionMessage.value = '';
@@ -467,10 +474,18 @@ async function applyDeduction() {
       reason: deductionReason.value || undefined
     });
     let wasCapped = false;
+    let requested = value;
+    let deducted = value;
     try {
       const data = await (typeof res?.json === 'function' ? res.json() : Promise.resolve(null));
       if (data && data.was_capped === true) {
         wasCapped = true;
+      }
+      if (data && typeof data.requested_amount === 'number') {
+        requested = data.requested_amount;
+      }
+      if (data && typeof data.deducted_amount === 'number') {
+        deducted = data.deducted_amount;
       }
     } catch {
       // ignore JSON parse errors; fall back to generic success text
@@ -478,8 +493,8 @@ async function applyDeduction() {
     deductionAmount.value = null;
     deductionReason.value = '';
     deductionMessage.value = wasCapped
-      ? "Kiritilgan summa naqd balansdan katta edi. Mavjud barcha naqd balans ayirildi."
-      : 'Naqd balansdan summa muvaffaqiyatli ayirildi.';
+      ? 'Kiritilgan summa mavjud naqd balansdan katta edi. Mavjud barcha naqd balans ayirildi.'
+      : `Naqd balansdan ${formatMoney(deducted)} muvaffaqiyatli ayirildi.`;
     await load();
   } catch (e) {
     console.error(e);
