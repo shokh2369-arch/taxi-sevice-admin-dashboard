@@ -103,6 +103,8 @@ let pollTimer = null;
 const requestWarning = ref('');
 const driverWarning = ref('');
 let googleInitFitted = false;
+let leafletLocked = false;
+let googleLocked = false;
 
 function splitEndpoints(csv) {
   return String(csv || '')
@@ -288,7 +290,7 @@ function renderMarkersLeaflet(drivers, requests) {
   });
 
   const layers = [...driverLayer.value.getLayers(), ...requestLayer.value.getLayers()];
-  if (layers.length) {
+  if (layers.length && !leafletLocked) {
     const group = L.featureGroup(layers);
     leafletMap.value.fitBounds(group.getBounds().pad(0.2));
   }
@@ -355,7 +357,7 @@ function renderMarkersGoogle(drivers, requests) {
     googleRequestMarkers.push(marker);
   });
 
-  if (!googleInitFitted && (drivers.length || requests.length)) {
+  if (!googleLocked && !googleInitFitted && (drivers.length || requests.length)) {
     const bounds = new google.maps.LatLngBounds();
     drivers.forEach((d) => bounds.extend({ lat: d.latlng[0], lng: d.latlng[1] }));
     requests.forEach((r) => bounds.extend({ lat: r.latlng[0], lng: r.latlng[1] }));
@@ -484,6 +486,13 @@ onMounted(async () => {
       leafletMap.value.scrollWheelZoom?.enable?.();
       leafletMap.value.touchZoom?.enable?.();
       leafletMap.value.doubleClickZoom?.enable?.();
+
+      leafletMap.value.on('zoomstart', () => {
+        leafletLocked = true;
+      });
+      leafletMap.value.on('dragstart', () => {
+        leafletLocked = true;
+      });
     }
 
     await refreshData();
