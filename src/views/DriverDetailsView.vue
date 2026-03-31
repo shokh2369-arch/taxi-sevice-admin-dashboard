@@ -462,17 +462,32 @@ async function applyDeduction() {
   isApplyingDeduction.value = true;
   deductionMessage.value = '';
   try {
-    await deductDriverBalance(id, {
+    const res = await deductDriverBalance(id, {
       amount: value,
       reason: deductionReason.value || undefined
     });
+    let wasCapped = false;
+    try {
+      const data = await (typeof res?.json === 'function' ? res.json() : Promise.resolve(null));
+      if (data && data.was_capped === true) {
+        wasCapped = true;
+      }
+    } catch {
+      // ignore JSON parse errors; fall back to generic success text
+    }
     deductionAmount.value = null;
     deductionReason.value = '';
-    deductionMessage.value = 'Naqd balansdan summa muvaffaqiyatli ayirildi.';
+    deductionMessage.value = wasCapped
+      ? "Kiritilgan summa naqd balansdan katta edi. Mavjud barcha naqd balans ayirildi."
+      : 'Naqd balansdan summa muvaffaqiyatli ayirildi.';
     await load();
   } catch (e) {
     console.error(e);
-    deductionMessage.value = 'Balans ayirishda xatolik yuz berdi.';
+    deductionMessage.value =
+      e?.response?.data?.error ||
+      e?.data?.error ||
+      e?.message ||
+      'Balans ayirishda xatolik yuz berdi.';
   } finally {
     isApplyingDeduction.value = false;
   }
