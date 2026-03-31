@@ -456,6 +456,7 @@ async function add() {
 }
 
 async function applyDeduction() {
+  if (isApplyingDeduction.value) return;
   if (deductionAmount.value == null || deductionAmount.value <= 0) return;
   const value = Math.round(deductionAmount.value);
   isApplyingDeduction.value = true;
