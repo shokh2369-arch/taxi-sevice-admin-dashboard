@@ -1101,21 +1101,13 @@ function nearestDriverId(row) {
 
 async function adminSendRequestOfferToDriver(requestId, driverId) {
   const rid = encodeURIComponent(String(requestId));
-  const did = encodeURIComponent(String(driverId));
 
-  // Admin “offer/dispatch” endpoints (backend must implement one of these).
+  // Canonical backend endpoint (mirrored under /api/admin, /api/v1/admin, /v1/admin).
   const attempts = [
-    // query-style
-    { path: `/admin/dispatch?request_id=${rid}&driver_id=${did}`, body: null },
-    { path: `/api/admin/dispatch?request_id=${rid}&driver_id=${did}`, body: null },
-    { path: `/admin/nearest-drivers/offer?request_id=${rid}&driver_id=${did}`, body: null },
-    { path: `/api/admin/nearest-drivers/offer?request_id=${rid}&driver_id=${did}`, body: null },
-
-    // body-style
-    { path: `/admin/dispatch`, body: { request_id: String(requestId), driver_id: String(driverId) } },
-    { path: `/api/admin/dispatch`, body: { request_id: String(requestId), driver_id: String(driverId) } },
-    { path: `/admin/ride-requests/${rid}/offer`, body: { driver_id: String(driverId) } },
-    { path: `/api/admin/ride-requests/${rid}/offer`, body: { driver_id: String(driverId) } }
+    { path: `/admin/ride-requests/${rid}/offer`, body: { driver_id: Number(driverId) || driverId } },
+    { path: `/api/admin/ride-requests/${rid}/offer`, body: { driver_id: Number(driverId) || driverId } },
+    { path: `/api/v1/admin/ride-requests/${rid}/offer`, body: { driver_id: Number(driverId) || driverId } },
+    { path: `/v1/admin/ride-requests/${rid}/offer`, body: { driver_id: Number(driverId) || driverId } }
   ];
 
   let lastErr = null;
@@ -1128,7 +1120,7 @@ async function adminSendRequestOfferToDriver(requestId, driverId) {
       if (String(lastErr.message || '').includes('404')) continue;
     }
   }
-  throw lastErr || new Error('No admin dispatch endpoint available');
+  throw lastErr || new Error('No admin offer endpoint available');
 }
 
 async function sendRequestToNearestDriver(row) {
@@ -1149,9 +1141,7 @@ async function sendRequestToNearestDriver(row) {
     nearestActionStatus.value = `Sent offer to driver #${driverId}. Driver may accept or ignore.`;
   } catch (e) {
     console.error(e);
-    nearestActionStatus.value =
-      (e instanceof Error ? e.message : 'Failed to send offer') +
-      '\nBackend needs an admin dispatch/offer endpoint (not /driver/accept-request).';
+    nearestActionStatus.value = e instanceof Error ? e.message : 'Failed to send offer';
   } finally {
     if (nearestActionBusyKey.value === busyKey) nearestActionBusyKey.value = '';
   }
@@ -1196,9 +1186,7 @@ async function sendNearestRequestToSelectedDriver(row) {
     nearestActionStatus.value = `Sent offer for request ${requestId} to driver #${driverId}.`;
   } catch (e) {
     console.error(e);
-    nearestActionStatus.value =
-      (e instanceof Error ? e.message : 'Failed to send offer') +
-      '\nBackend needs an admin dispatch/offer endpoint (not /driver/accept-request).';
+    nearestActionStatus.value = e instanceof Error ? e.message : 'Failed to send offer';
   } finally {
     if (nearestActionBusyKey.value === busyKey) nearestActionBusyKey.value = '';
   }
