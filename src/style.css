@@ -362,6 +362,13 @@ a {
 .legend-red { background: #dc2626; }
 .legend-blue { background: #2563eb; }
 
+/* Ride-request Leaflet pop-up (className on popup wrapper) */
+.leaflet-popup.map-request-popup .leaflet-popup-content {
+  margin: 0.65rem 0.85rem;
+  line-height: 1.45;
+  min-width: 11rem;
+}
+
 @media (max-width: 900px) {
   .map-layout {
     grid-template-columns: 1fr;

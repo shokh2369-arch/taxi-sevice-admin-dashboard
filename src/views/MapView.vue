@@ -43,6 +43,10 @@
             <p v-if="selectedItem.driver_name"><strong>Name:</strong> {{ selectedItem.driver_name }}</p>
             <p v-if="selectedItem.plate_number"><strong>Plate:</strong> {{ selectedItem.plate_number }}</p>
           </template>
+          <template v-if="selectedItem.type === 'request'">
+            <p v-if="selectedItem.rider_name"><strong>Client:</strong> {{ selectedItem.rider_name }}</p>
+            <p class="muted" style="font-size: 0.8rem; margin: 0.25rem 0 0;">Tip: click the blue map pin to open the request pop-up.</p>
+          </template>
           <p><strong>Phone:</strong> {{ selectedItem.phone || 'N/A' }}</p>
 
           <button
@@ -710,48 +714,103 @@ function driverMarkerPopupHtml(d) {
   return `<div>${parts.join('<br/>')}</div>`;
 }
 
+/** Ride request marker + Leaflet pop-up (escaped). */
+function requestMarkerPopupHtml(r) {
+  const rid = r.request_id ?? r.id ?? 'N/A';
+  const idDisp =
+    String(rid).length > 28 ? `${escapeHtml(String(rid).slice(0, 10))}…` : escapeHtml(String(rid));
+  const name = (r.rider_name && escapeHtml(r.rider_name)) || '';
+  const phone = escapeHtml(r.phone || '') || 'N/A';
+  const parts = ['<strong>Ride request</strong>', `ID: ${idDisp}`];
+  if (name) parts.push(`Client: ${name}`);
+  parts.push(`Phone: ${phone}`);
+  return `<div class="map-popup-request">${parts.join('<br/>')}</div>`;
+}
+
+/** Map `/admin/users` row to lookup keys: numeric user id + `tg:&lt;telegram_id&gt;`. */
+function collectRiderProfileLookupKeys(r) {
+  const keys = [];
+  const add = (v) => {
+    if (v == null || v === '') return;
+    const s = String(v);
+    if (!keys.includes(s)) keys.push(s);
+  };
+  add(r.user_id);
+  add(r.rider_id);
+  add(r.rider_user_id);
+  add(r.passenger_id);
+  add(r.passenger_user_id);
+  add(r.customer_id);
+  add(r.client_id);
+  add(r.client_user_id);
+  add(r.booking_user_id);
+  if (r.telegram_id != null) add(`tg:${String(r.telegram_id)}`);
+  if (r.passenger_telegram_id != null) add(`tg:${String(r.passenger_telegram_id)}`);
+  if (r.client_telegram_id != null) add(`tg:${String(r.client_telegram_id)}`);
+  if (r.telegram_user_id != null) add(`tg:${String(r.telegram_user_id)}`);
+  if (r.tg_id != null) add(`tg:${String(r.tg_id)}`);
+  return keys;
+}
+
 /**
- * Ride request DTO may omit rider phone; join against users list (`user_id`, etc.).
- * @param {Map<string, string>} phoneByUserId
+ * Rider phone + name from `fetchUsersList()` — keyed by `user_id` / `id` and by `tg:&lt;telegram_id&gt;`
+ * (ride requests often only expose telegram id, not admin user id).
+ * @returns {Map<string, { phone: string, name: string }>}
  */
-function normalizeRequests(raw, phoneByUserId) {
+function buildRiderProfileLookup(raw) {
+  const map = new Map();
+  const rows = Array.isArray(raw) ? raw : raw?.users || raw?.items || [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    let phone = pickRiderPhone(row) || phoneStr(row.phone) || '';
+    if (phone && !looksLikePhoneValue(phone)) phone = '';
+    const name = phoneStr(row.name ?? row.full_name ?? '');
+    const uid = row.user_id ?? row.id;
+    const tg = row.telegram_id;
+    if (!phone && !name && uid == null && tg == null) continue;
+    const prof = { phone, name };
+    if (uid != null) map.set(String(uid), prof);
+    if (tg != null) map.set(`tg:${String(tg)}`, prof);
+  }
+  return map;
+}
+
+/**
+ * Ride request map DTO is minimal; join users by id or telegram. Pop-up shows phone / client name when found.
+ * @param {Map<string, { phone: string, name: string }>} riderProfileByKey
+ */
+function normalizeRequests(raw, riderProfileByKey) {
   const rows = extractRequestRows(raw);
   return rows.map((row) => {
     const r = unwrapMapRequestRow(row);
     const ll = pickRequestLatLng(r);
     let phone = pickRiderPhone(r);
-    if (!phone && phoneByUserId?.size) {
-      const uid =
-        r.user_id ??
-        r.rider_id ??
-        r.rider_user_id ??
-        r.passenger_id ??
-        r.passenger_user_id ??
-        r.customer_id ??
-        r.client_id;
-      if (uid != null) phone = phoneByUserId.get(String(uid)) ?? '';
+    let rider_name = '';
+    const lookupKeys = collectRiderProfileLookupKeys(r);
+    for (const key of lookupKeys) {
+      const p = riderProfileByKey?.get(key);
+      if (p) {
+        if (!phone && p.phone) phone = p.phone;
+        if (!rider_name && p.name) rider_name = p.name;
+      }
+    }
+    if (
+      import.meta.env.DEV &&
+      !phone &&
+      riderProfileByKey?.size > 0 &&
+      lookupKeys.length > 0 &&
+      !lookupKeys.some((k) => riderProfileByKey.has(k))
+    ) {
+      console.warn('[Map] ride request: no users row for join keys', lookupKeys, r);
     }
     return {
       ...r,
       request_id: r.request_id ?? r.id ?? r.trip_id,
       phone,
+      rider_name,
       latlng: ll
     };
   }).filter((r) => r.latlng);
-}
-
-/** @param {unknown} raw response from `fetchUsersList()` */
-function buildUserPhoneById(raw) {
-  const map = new Map();
-  const rows = Array.isArray(raw) ? raw : raw?.users || raw?.items || [];
-  for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    const id = row.user_id ?? row.id;
-    if (id == null) continue;
-    const phone = pickRiderPhone(row) || phoneStr(row.phone);
-    if (phone && looksLikePhoneValue(phone)) map.set(String(id), phone);
-  }
-  return map;
 }
 
 function googleCircleIcon(color) {
@@ -773,6 +832,7 @@ function renderMarkersLeaflet(drivers, requests) {
     const m = L.marker(d.latlng, { icon: markerIconLeaflet(driverStatusColor(d)) });
     m.bindPopup(driverMarkerPopupHtml(d));
     m.on('click', () => {
+      m.openPopup();
       selectedItem.value = {
         type: 'driver',
         id: d.driver_id ?? 'N/A',
@@ -789,17 +849,14 @@ function renderMarkersLeaflet(drivers, requests) {
 
   requests.forEach((r) => {
     const m = L.marker(r.latlng, { icon: markerIconLeaflet('#2563eb') });
-    m.bindPopup(`
-      <div>
-        <strong>Request #${r.request_id ?? 'N/A'}</strong><br/>
-        Phone: ${r.phone || 'N/A'}
-      </div>
-    `);
+    m.bindPopup(requestMarkerPopupHtml(r), { maxWidth: 320, className: 'map-request-popup' });
     m.on('click', () => {
+      m.openPopup();
       selectedItem.value = {
         type: 'request',
         id: r.request_id ?? 'N/A',
         phone: r.phone,
+        rider_name: r.rider_name,
         latlng: r.latlng,
         raw: r
       };
@@ -854,17 +911,13 @@ function renderMarkersGoogle(drivers, requests) {
       title: `Request #${r.request_id ?? 'N/A'}`
     });
     marker.addListener('click', () => {
-      googleInfoWindow.setContent(`
-        <div>
-          <strong>Request #${r.request_id ?? 'N/A'}</strong><br/>
-          Phone: ${r.phone || 'N/A'}
-        </div>
-      `);
+      googleInfoWindow.setContent(requestMarkerPopupHtml(r));
       googleInfoWindow.open({ map: googleMap, anchor: marker });
       selectedItem.value = {
         type: 'request',
         id: r.request_id ?? 'N/A',
         phone: r.phone,
+        rider_name: r.rider_name,
         latlng: r.latlng,
         raw: r
       };
@@ -918,8 +971,8 @@ async function refreshData() {
       console.warn('[Map] GET /admin/drivers (profile join) failed', settled[1].reason);
     }
 
-    const phoneByUserId =
-      settled[2].status === 'fulfilled' ? buildUserPhoneById(settled[2].value) : new Map();
+    const riderProfileByKey =
+      settled[2].status === 'fulfilled' ? buildRiderProfileLookup(settled[2].value) : new Map();
     if (settled[2].status === 'rejected') {
       console.warn('[Map] users list (rider phone enrichment) failed', settled[2].reason);
     }
@@ -946,7 +999,7 @@ async function refreshData() {
     mapRequestsApiCount.value = rideRequestsFetchOk ? requestRows.length : 0;
 
     const drivers = normalizeDrivers(driversRaw, profileByDriverId);
-    const requests = normalizeRequests(requestsRaw, phoneByUserId);
+    const requests = normalizeRequests(requestsRaw, riderProfileByKey);
     mapMarkersPlotted.value = drivers.length;
     mapRequestMarkersPlotted.value = requests.length;
     renderMarkers(drivers, requests);
