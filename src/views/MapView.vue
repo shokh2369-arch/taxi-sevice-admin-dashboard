@@ -214,15 +214,31 @@ function phoneStr(v) {
   return s;
 }
 
+/** Rough check: value looks like a phone (digits), not e.g. telegram_username. */
+function looksLikePhoneValue(s) {
+  if (!s) return false;
+  const digits = s.replace(/\D/g, '');
+  return digits.length >= 8;
+}
+
 const DRIVER_PHONE_KEYS = [
   'phone',
   'driver_phone',
   'phone_number',
+  'phoneNumber',
+  'Phone',
   'mobile',
+  'mobile_phone',
+  'mobilePhone',
   'cell',
+  'msisdn',
   'contact_phone',
+  'primary_phone',
   'application_phone',
-  'tel'
+  'tel',
+  'telegram_phone',
+  'whatsapp',
+  'whatsapp_number'
 ];
 
 const DRIVER_PHONE_PARENT_KEYS = [
@@ -232,30 +248,15 @@ const DRIVER_PHONE_PARENT_KEYS = [
   'app',
   'user',
   'profile',
-  'driver'
+  'driver',
+  'telegram',
+  'contact',
+  'contacts',
+  'meta',
+  'details',
+  'info',
+  'personal'
 ];
-
-function pickFirstPhoneFromObject(o, keys) {
-  if (!o || typeof o !== 'object') return '';
-  for (const k of keys) {
-    const s = phoneStr(o[k]);
-    if (s) return s;
-  }
-  return '';
-}
-
-/** Aligns with common `/admin/drivers` and map DTO shapes (incl. nested `application`). */
-function pickDriverPhone(d) {
-  const direct = pickFirstPhoneFromObject(d, DRIVER_PHONE_KEYS);
-  if (direct) return direct;
-  if (!d || typeof d !== 'object') return '';
-  for (const parent of DRIVER_PHONE_PARENT_KEYS) {
-    const nested = d[parent];
-    const p = pickFirstPhoneFromObject(nested, DRIVER_PHONE_KEYS);
-    if (p) return p;
-  }
-  return '';
-}
 
 const RIDER_PHONE_KEYS = [
   'phone',
@@ -265,24 +266,113 @@ const RIDER_PHONE_KEYS = [
   'customer_phone',
   'client_phone',
   'phone_number',
+  'phoneNumber',
   'mobile',
+  'mobile_phone',
   'contact_phone',
   'pickup_phone',
-  'from_phone'
+  'from_phone',
+  'msisdn',
+  'telegram_phone',
+  'whatsapp',
+  'whatsapp_number'
 ];
 
-const RIDER_PHONE_PARENT_KEYS = ['user', 'rider', 'passenger', 'customer', 'client', 'profile'];
+const RIDER_PHONE_PARENT_KEYS = [
+  'user',
+  'rider',
+  'passenger',
+  'customer',
+  'client',
+  'profile',
+  'telegram',
+  'contact',
+  'contacts',
+  'meta',
+  'booking',
+  'details',
+  'info'
+];
 
-function pickRiderPhone(r) {
-  const direct = pickFirstPhoneFromObject(r, RIDER_PHONE_KEYS);
-  if (direct) return direct;
-  if (!r || typeof r !== 'object') return '';
-  for (const parent of RIDER_PHONE_PARENT_KEYS) {
-    const nested = r[parent];
-    const p = pickFirstPhoneFromObject(nested, RIDER_PHONE_KEYS);
-    if (p) return p;
+function pickFirstPhoneFromObject(o, keys) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return '';
+  for (const k of keys) {
+    const s = phoneStr(o[k]);
+    if (s && looksLikePhoneValue(s)) return s;
   }
   return '';
+}
+
+/** Any own key that looks phone-related (API uses odd JSON tags). Skips telegram_id / usernames. */
+function pickPhoneByLooseKeyScan(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return '';
+  for (const [k, v] of Object.entries(o)) {
+    if (v == null || typeof v === 'object') continue;
+    const kl = k.toLowerCase();
+    if (kl === 'telegram_id' || kl === 'telegramid' || kl === 'user_id' || kl === 'chat_id') continue;
+    if (
+      kl.includes('phone') ||
+      kl.includes('msisdn') ||
+      kl === 'mobile' ||
+      kl === 'cell' ||
+      kl === 'tel' ||
+      kl.includes('whatsapp')
+    ) {
+      const s = phoneStr(v);
+      if (s && looksLikePhoneValue(s)) return s;
+    }
+  }
+  return '';
+}
+
+/**
+ * Depth-first phone search for map DTOs (nested application / user / telegram).
+ * @param {string[]} preferredKeys
+ * @param {string[]} childPropNames — extra object properties to recurse into
+ */
+function pickPhoneDeep(o, preferredKeys, childPropNames, maxDepth) {
+  const seen = new Set();
+
+  function walk(node, depth) {
+    if (!node || typeof node !== 'object' || depth > maxDepth) return '';
+    if (seen.has(node)) return '';
+    seen.add(node);
+
+    let p = pickFirstPhoneFromObject(node, preferredKeys);
+    if (p) return p;
+    p = pickPhoneByLooseKeyScan(node);
+    if (p) return p;
+
+    for (const prop of childPropNames) {
+      const child = node[prop];
+      if (child && typeof child === 'object' && !Array.isArray(child)) {
+        p = walk(child, depth + 1);
+        if (p) return p;
+      }
+    }
+    return '';
+  }
+
+  return walk(o, 0);
+}
+
+const DRIVER_PHONE_SCAN_PROPS = [...new Set([...DRIVER_PHONE_PARENT_KEYS, 'data', 'payload', 'attributes'])];
+
+function pickDriverPhone(d) {
+  return pickPhoneDeep(d, DRIVER_PHONE_KEYS, DRIVER_PHONE_SCAN_PROPS, 5);
+}
+
+function pickRiderPhone(r) {
+  const props = [...new Set([...RIDER_PHONE_PARENT_KEYS, 'data', 'payload', 'attributes'])];
+  return pickPhoneDeep(r, RIDER_PHONE_KEYS, props, 5);
+}
+
+/** After `{ ...inner, ...row }`, restore nested phones if the wrapper cleared them with "" / null. */
+function restoreNestedStrings(merged, inner, keys) {
+  if (!inner || typeof inner !== 'object') return;
+  for (const k of keys) {
+    if (!phoneStr(merged[k]) && phoneStr(inner[k])) merged[k] = inner[k];
+  }
 }
 
 function markerIconLeaflet(color) {
@@ -412,7 +502,9 @@ function unwrapMapDriverRow(row) {
   if (!row || typeof row !== 'object') return row;
   const nested = row.driver ?? row.Driver;
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    return { ...nested, ...row };
+    const merged = { ...nested, ...row };
+    restoreNestedStrings(merged, nested, DRIVER_PHONE_KEYS);
+    return merged;
   }
   return row;
 }
@@ -421,7 +513,9 @@ function unwrapMapRequestRow(row) {
   if (!row || typeof row !== 'object') return row;
   const nested = row.ride_request ?? row.request ?? row.Request ?? row.RideRequest;
   if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    return { ...nested, ...row };
+    const merged = { ...nested, ...row };
+    restoreNestedStrings(merged, nested, RIDER_PHONE_KEYS);
+    return merged;
   }
   return row;
 }
