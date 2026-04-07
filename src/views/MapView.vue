@@ -32,11 +32,21 @@
 
     <div class="map-layout">
       <aside class="map-sidebar">
-        <h3 style="margin-top: 0;">Details</h3>
-        <div v-if="!selectedItem">
-          Click a rider request or driver marker.
-        </div>
-        <div v-else>
+        <details class="map-details" :open="Boolean(selectedItem)">
+          <summary class="map-details-summary">
+            <span><strong>Details</strong></span>
+            <span class="muted" style="font-size: 0.82rem;">
+              <template v-if="selectedItem">
+                {{ selectedItem.type }} #{{ selectedItem.id }}
+              </template>
+              <template v-else>Tap to open</template>
+            </span>
+          </summary>
+          <div class="map-details-body">
+            <div v-if="!selectedItem">
+              Tap a ride request or driver marker.
+            </div>
+            <div v-else>
           <p><strong>Type:</strong> {{ selectedItem.type }}</p>
           <p><strong>ID:</strong> {{ selectedItem.id }}</p>
           <template v-if="selectedItem.type === 'driver'">
@@ -97,7 +107,9 @@
               </li>
             </ul>
           </div>
-        </div>
+            </div>
+          </div>
+        </details>
       </aside>
 
       <section class="map-box">

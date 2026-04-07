@@ -330,6 +330,28 @@ a {
   overflow-y: auto;
 }
 
+.map-details {
+  border-radius: 0.5rem;
+}
+
+.map-details-summary {
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.map-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.map-details-body {
+  padding-top: 0.5rem;
+}
+
 .map-box {
   background: white;
   border-radius: 0.5rem;
@@ -372,6 +394,17 @@ a {
 @media (max-width: 900px) {
   .map-layout {
     grid-template-columns: 1fr;
+  }
+  .map-sidebar {
+    max-height: none;
+    overflow: visible;
+    padding: 0.5rem 0.75rem;
+  }
+  .map-details-summary {
+    padding: 0.5rem 0;
+  }
+  .map-details-body .button {
+    min-height: 44px;
   }
   .map-canvas {
     height: 65vh;
