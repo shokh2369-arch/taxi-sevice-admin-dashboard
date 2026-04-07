@@ -384,7 +384,7 @@ function markerIconLeaflet(color) {
   });
 }
 
-/** Map DTOs often omit `online`; rely on coords for “live” unless the payload clearly says offline. */
+/** Offline when the API clearly says so (grey marker). */
 function driverExplicitlyOffline(d) {
   if (!d || typeof d !== 'object') return false;
   if (d.online === false || d.is_online === false || d.isOnline === false) return true;
@@ -394,36 +394,41 @@ function driverExplicitlyOffline(d) {
   return false;
 }
 
-function driverExplicitlyOnline(d) {
+/**
+ * Green markers only when the payload explicitly says the driver is online / on duty.
+ * We do NOT treat `active`, broad status words, live-location flags, or coordinates alone as “online”.
+ */
+function driverStrictlyOnline(d) {
   if (!d || typeof d !== 'object') return false;
+  if (driverExplicitlyOffline(d)) return false;
   if (d.online === true || d.is_online === true || d.isOnline === true) return true;
-  if (d.on_duty === true || d.driver_online === true) return true;
-  if (d.active === true || d.is_active === true) return true;
+  if (d.driver_online === true || d.on_duty === true) return true;
   const st = String(d.status ?? d.driver_status ?? d.state ?? '').toLowerCase();
-  if (['online', 'on_line', 'working', 'active', 'available', 'busy', 'idle', 'onduty', 'on-duty'].includes(st)) {
-    return true;
-  }
-  if (d.live === true || d.has_live === true || d.has_live_location === true) return true;
+  if (['online', 'on_line', 'onduty', 'on-duty', 'on_duty'].includes(st)) return true;
   return false;
 }
 
-function driverStatusColor(d) {
+/** “Live” = sharing a position for the legend (online + live → green). */
+function driverHasLivePosition(d) {
   const hasCoords =
     Array.isArray(d.latlng) &&
     d.latlng.length >= 2 &&
     Number.isFinite(d.latlng[0]) &&
     Number.isFinite(d.latlng[1]);
-
-  if (driverExplicitlyOffline(d)) return '#6b7280';
-  if (hasCoords && (driverExplicitlyOnline(d) || !driverExplicitlyOffline(d))) return '#16a34a';
-
-  const online = driverExplicitlyOnline(d);
-  const hasLive = Boolean(
-    d.live ?? d.has_live ?? d.has_live_location ?? (pickDriverLatLng(d) != null)
+  return Boolean(
+    d.live ?? d.has_live ?? d.has_live_location ?? d.sharing_live_location ?? hasCoords
   );
+}
+
+function driverStatusColor(d) {
+  if (driverExplicitlyOffline(d)) return '#6b7280';
+
+  const online = driverStrictlyOnline(d);
+  const hasLive = driverHasLivePosition(d);
+
   if (online && hasLive) return '#16a34a';
-  if (!online) return '#6b7280';
-  return '#dc2626';
+  if (online && !hasLive) return '#dc2626';
+  return '#6b7280';
 }
 
 async function firstSuccess(paths) {
