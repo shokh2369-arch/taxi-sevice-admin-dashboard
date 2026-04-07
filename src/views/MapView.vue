@@ -49,11 +49,11 @@
             <div v-else>
           <p><strong>Type:</strong> {{ selectedItem.type }}</p>
           <p><strong>ID:</strong> {{ selectedItem.id }}</p>
-          <template v-if="selectedItem.type === 'driver'">
+          <template v-if="selectionIsDriver">
             <p v-if="selectedItem.driver_name"><strong>Name:</strong> {{ selectedItem.driver_name }}</p>
             <p v-if="selectedItem.plate_number"><strong>Plate:</strong> {{ selectedItem.plate_number }}</p>
           </template>
-          <template v-if="selectedItem.type === 'request'">
+          <template v-if="selectionIsRequest">
             <p v-if="selectedItem.rider_name"><strong>Client:</strong> {{ selectedItem.rider_name }}</p>
             <p class="muted" style="font-size: 0.8rem; margin: 0.25rem 0 0;">Tip: click the blue map pin to open the request pop-up.</p>
           </template>
@@ -69,7 +69,7 @@
           </button>
 
           <button
-            v-if="selectedItem.type === 'request'"
+            v-if="selectionIsRequest"
             class="button"
             style="margin-bottom: 0.5rem;"
             @click="loadNearestDrivers(selectedItem)"
@@ -78,7 +78,7 @@
           </button>
 
           <button
-            v-if="selectedItem.type === 'driver'"
+            v-if="selectionIsDriver"
             class="button"
             style="margin-bottom: 0.5rem;"
             @click="loadNearestRequests(selectedItem)"
@@ -87,28 +87,26 @@
           </button>
 
           <div v-if="nearestList.length" style="margin-top: 0.5rem;">
-            <h4 style="margin: 0 0 0.35rem;">Nearest {{ selectedItem.type === 'driver' ? 'requests' : 'drivers' }}</h4>
+            <h4 style="margin: 0 0 0.35rem;">Nearest {{ selectionIsDriver ? 'requests' : 'drivers' }}</h4>
             <p v-if="nearestActionStatus" class="muted" style="margin: 0 0 0.35rem; font-size: 0.82rem; white-space: pre-wrap;">
               {{ nearestActionStatus }}
             </p>
-            <ul style="margin: 0; padding-left: 1.1rem;">
-              <li v-for="(row, idx) in nearestList" :key="idx" style="margin-bottom: 0.25rem;">
-                <span>{{ nearestLabel(row) }}</span>
+            <ul class="map-nearest-list">
+              <li v-for="(row, idx) in nearestList" :key="nearestRowKey(row, idx)" class="map-nearest-item">
+                <span class="map-nearest-label">{{ nearestLabel(row) }}</span>
                 <button
-                  v-if="selectedItem.type === 'request'"
+                  v-show="selectionIsRequest"
                   type="button"
-                  class="button"
-                  style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;"
+                  class="button map-nearest-send"
                   :disabled="nearestActionBusyKey === `${selectedItem.id}:${(row?.id ?? row?.driver_id ?? row?.driver_user_id ?? '')}`"
                   @click="sendRequestToNearestDriver(row)"
                 >
                   Send
                 </button>
                 <button
-                  v-if="selectedItem.type === 'driver'"
+                  v-show="selectionIsDriver"
                   type="button"
-                  class="button"
-                  style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;"
+                  class="button map-nearest-send"
                   :disabled="nearestActionBusyKey === `${(row?.request_id ?? row?.id ?? row?.trip_id ?? '')}:${selectedItem.id}`"
                   @click="sendNearestRequestToSelectedDriver(row)"
                 >
@@ -161,6 +159,22 @@ const MAP_DRIVERS_ONLINE_POSITION_ONLY = true;
 const error = ref('');
 const selectedItem = ref(null);
 const nearestList = ref([]);
+
+/** Stable list row keys + tolerant type checks (avoids missing Send if `type` has odd casing). */
+const selectionIsRequest = computed(
+  () => String(selectedItem.value?.type || '').trim().toLowerCase() === 'request'
+);
+const selectionIsDriver = computed(
+  () => String(selectedItem.value?.type || '').trim().toLowerCase() === 'driver'
+);
+
+function nearestRowKey(row, idx) {
+  if (row && typeof row === 'object') {
+    const id = row.id ?? row.driver_id ?? row.request_id ?? row.trip_id;
+    if (id != null) return `n-${id}`;
+  }
+  return `n-idx-${idx}`;
+}
 let pollTimer = null;
 const requestWarning = ref('');
 const driverWarning = ref('');
