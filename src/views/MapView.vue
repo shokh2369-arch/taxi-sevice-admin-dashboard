@@ -80,6 +80,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { apiGet, API_BASE } from '../api';
+import { fetchUsersList } from '../api/users.js';
 
 const mapEl = ref(null);
 const leafletMap = ref(null);
@@ -525,32 +526,86 @@ function unwrapMapRequestRow(row) {
   return row;
 }
 
-function normalizeDrivers(raw) {
+/**
+ * Map feed often omits phones; full `GET /admin/drivers` rows usually include them (see Drivers list).
+ * @param {Map<string, string>} phoneByDriverId
+ */
+function normalizeDrivers(raw, phoneByDriverId) {
   const rows = extractDriverRows(raw);
   return rows.map((row) => {
     const d = unwrapMapDriverRow(row);
     const ll = pickDriverLatLng(d);
+    const id = d.driver_id ?? d.id;
+    let phone = pickDriverPhone(d);
+    if (!phone && phoneByDriverId?.size && id != null) {
+      phone = phoneByDriverId.get(String(id)) ?? '';
+    }
     return {
       ...d,
-      driver_id: d.driver_id ?? d.id,
-      phone: pickDriverPhone(d),
+      driver_id: id,
+      phone,
       latlng: ll
     };
   }).filter((d) => d.latlng);
 }
 
-function normalizeRequests(raw) {
+/** @param {unknown} raw response from `GET /admin/drivers` */
+function buildDriverPhoneById(raw) {
+  const map = new Map();
+  const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const d = unwrapMapDriverRow(row);
+    const id = d.driver_id ?? d.id;
+    if (id == null) continue;
+    const phone = pickDriverPhone(d);
+    if (phone) map.set(String(id), phone);
+  }
+  return map;
+}
+
+/**
+ * Ride request DTO may omit rider phone; join against users list (`user_id`, etc.).
+ * @param {Map<string, string>} phoneByUserId
+ */
+function normalizeRequests(raw, phoneByUserId) {
   const rows = extractRequestRows(raw);
   return rows.map((row) => {
     const r = unwrapMapRequestRow(row);
     const ll = pickRequestLatLng(r);
+    let phone = pickRiderPhone(r);
+    if (!phone && phoneByUserId?.size) {
+      const uid =
+        r.user_id ??
+        r.rider_id ??
+        r.rider_user_id ??
+        r.passenger_id ??
+        r.passenger_user_id ??
+        r.customer_id ??
+        r.client_id;
+      if (uid != null) phone = phoneByUserId.get(String(uid)) ?? '';
+    }
     return {
       ...r,
       request_id: r.request_id ?? r.id ?? r.trip_id,
-      phone: pickRiderPhone(r),
+      phone,
       latlng: ll
     };
   }).filter((r) => r.latlng);
+}
+
+/** @param {unknown} raw response from `fetchUsersList()` */
+function buildUserPhoneById(raw) {
+  const map = new Map();
+  const rows = Array.isArray(raw) ? raw : raw?.users || raw?.items || [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const id = row.user_id ?? row.id;
+    if (id == null) continue;
+    const phone = pickRiderPhone(row) || phoneStr(row.phone);
+    if (phone && looksLikePhoneValue(phone)) map.set(String(id), phone);
+  }
+  return map;
 }
 
 function googleCircleIcon(color) {
@@ -700,9 +755,29 @@ async function refreshData() {
   requestWarning.value = '';
   driverWarning.value = '';
   try {
-    console.log('[Map] fetching', `${API_BASE}${DRIVER_MAP_PATH}`);
-    const driversRaw = await apiGet(DRIVER_MAP_PATH);
+    console.log('[Map] fetching map + phone enrichment (drivers + users)');
+    const settled = await Promise.allSettled([
+      apiGet(DRIVER_MAP_PATH),
+      apiGet('/admin/drivers'),
+      fetchUsersList()
+    ]);
+
+    const mapDriversResult = settled[0];
+    if (mapDriversResult.status !== 'fulfilled') throw mapDriversResult.reason;
+    const driversRaw = mapDriversResult.value;
     console.log('[Map] success', `${API_BASE}${DRIVER_MAP_PATH}`);
+
+    const phoneByDriverId =
+      settled[1].status === 'fulfilled' ? buildDriverPhoneById(settled[1].value) : new Map();
+    if (settled[1].status === 'rejected') {
+      console.warn('[Map] GET /admin/drivers (phone enrichment) failed', settled[1].reason);
+    }
+
+    const phoneByUserId =
+      settled[2].status === 'fulfilled' ? buildUserPhoneById(settled[2].value) : new Map();
+    if (settled[2].status === 'rejected') {
+      console.warn('[Map] users list (rider phone enrichment) failed', settled[2].reason);
+    }
 
     let requestsRaw = [];
     try {
@@ -714,8 +789,8 @@ async function refreshData() {
     }
 
     const driverRows = extractDriverRows(driversRaw);
-    const drivers = normalizeDrivers(driversRaw);
-    const requests = normalizeRequests(requestsRaw);
+    const drivers = normalizeDrivers(driversRaw, phoneByDriverId);
+    const requests = normalizeRequests(requestsRaw, phoneByUserId);
     renderMarkers(drivers, requests);
 
     if (!drivers.length) {
