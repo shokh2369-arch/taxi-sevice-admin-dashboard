@@ -102,7 +102,17 @@
                   :disabled="nearestActionBusyKey === `${selectedItem.id}:${(row?.id ?? row?.driver_id ?? row?.driver_user_id ?? '')}`"
                   @click="resendRequestToNearestDriver(row)"
                 >
-                  Resend order
+                  Send
+                </button>
+                <button
+                  v-if="selectedItem.type === 'driver'"
+                  type="button"
+                  class="button"
+                  style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;"
+                  :disabled="nearestActionBusyKey === `${(row?.request_id ?? row?.id ?? row?.trip_id ?? '')}:${selectedItem.id}`"
+                  @click="sendNearestRequestToSelectedDriver(row)"
+                >
+                  Send
                 </button>
               </li>
             </ul>
@@ -1128,6 +1138,7 @@ async function resendRequestToNearestDriver(row) {
 
 async function loadNearestRequests(item) {
   if (!item?.id) return;
+  nearestActionStatus.value = '';
   const driverId = encodeURIComponent(String(item.id));
   try {
     const data = await firstSuccess([
@@ -1139,6 +1150,43 @@ async function loadNearestRequests(item) {
   } catch (e) {
     console.error(e);
     error.value = e instanceof Error ? e.message : 'Failed to fetch nearest requests';
+  }
+}
+
+function nearestRequestId(row) {
+  return row?.request_id ?? row?.id ?? row?.trip_id ?? null;
+}
+
+async function sendNearestRequestToSelectedDriver(row) {
+  if (selectedItem.value?.type !== 'driver') return;
+  const driverId = selectedItem.value?.id;
+  const requestId = nearestRequestId(row);
+  if (!driverId || !requestId) {
+    nearestActionStatus.value = 'Missing driver id or request_id.';
+    return;
+  }
+
+  const busyKey = `${requestId}:${driverId}`;
+  nearestActionBusyKey.value = busyKey;
+  nearestActionStatus.value = '';
+  try {
+    const body = { request_id: String(requestId) };
+    const headers = { 'X-Driver-Id': String(driverId) };
+    const res = await apiPostJson('/driver/accept-request', body, headers)
+      .catch(() => apiPostJson('/api/driver/accept-request', body, headers));
+
+    const ok = res?.ok === true || res?.assigned === true;
+    if (ok) {
+      const trip = res?.trip_id ?? res?.tripId ?? '';
+      nearestActionStatus.value = `Request sent to driver #${driverId}${trip ? ` (trip ${trip})` : ''}.`;
+    } else {
+      nearestActionStatus.value = `Sent to driver #${driverId}. Response: ${JSON.stringify(res)}`;
+    }
+  } catch (e) {
+    console.error(e);
+    nearestActionStatus.value = e instanceof Error ? e.message : 'Failed to send request to driver';
+  } finally {
+    if (nearestActionBusyKey.value === busyKey) nearestActionBusyKey.value = '';
   }
 }
 
