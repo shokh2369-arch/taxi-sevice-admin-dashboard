@@ -106,45 +106,9 @@ let googleInitFitted = false;
 let leafletLocked = false;
 let googleLocked = false;
 
-function splitEndpoints(csv) {
-  return String(csv || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function uniq(list) {
-  const out = [];
-  const seen = new Set();
-  for (const x of list) {
-    if (seen.has(x)) continue;
-    seen.add(x);
-    out.push(x);
-  }
-  return out;
-}
-
-// Prefer the new map endpoints first, then env overrides, then legacy fallbacks.
-const DRIVER_ENDPOINTS = uniq([
-  '/map/drivers',
-  '/admin/map/drivers',
-  ...splitEndpoints(import.meta.env.VITE_MAP_DRIVER_ENDPOINTS),
-  '/admin/drivers/live',
-  '/admin/drivers',
-  '/drivers/live',
-  '/drivers'
-]);
-
-const REQUEST_ENDPOINTS = uniq([
-  '/map/ride-requests',
-  '/admin/map/ride-requests',
-  ...splitEndpoints(import.meta.env.VITE_MAP_REQUEST_ENDPOINTS),
-  '/admin/requests',
-  '/admin/ride-requests',
-  '/admin/ride-requests/active',
-  '/ride-requests',
-  '/requests'
-]);
+/** Gin `/admin` group: ListDriversForMap, ListRideRequestsForMap */
+const DRIVER_MAP_PATH = '/admin/map/drivers';
+const REQUEST_MAP_PATH = '/admin/map/ride-requests';
 
 function num(v) {
   const n = Number(v);
@@ -196,14 +160,6 @@ async function firstSuccess(paths) {
     }
   }
   throw lastErr || new Error('All endpoint attempts failed');
-}
-
-async function firstSuccessOrEmpty(paths) {
-  try {
-    return await firstSuccess(paths);
-  } catch (e) {
-    return [];
-  }
 }
 
 function normalizeDrivers(raw) {
@@ -379,8 +335,18 @@ async function refreshData() {
   requestWarning.value = '';
   driverWarning.value = '';
   try {
-    const driversRaw = await firstSuccess(DRIVER_ENDPOINTS);
-    const requestsRaw = await firstSuccessOrEmpty(REQUEST_ENDPOINTS);
+    console.log('[Map] fetching', `${API_BASE}${DRIVER_MAP_PATH}`);
+    const driversRaw = await apiGet(DRIVER_MAP_PATH);
+    console.log('[Map] success', `${API_BASE}${DRIVER_MAP_PATH}`);
+
+    let requestsRaw = [];
+    try {
+      console.log('[Map] fetching', `${API_BASE}${REQUEST_MAP_PATH}`);
+      requestsRaw = await apiGet(REQUEST_MAP_PATH);
+      console.log('[Map] success', `${API_BASE}${REQUEST_MAP_PATH}`);
+    } catch (e) {
+      console.error('[Map] fetch failed', `${API_BASE}${REQUEST_MAP_PATH}`, e);
+    }
 
     const drivers = normalizeDrivers(driversRaw);
     const requests = normalizeRequests(requestsRaw);
