@@ -1,6 +1,17 @@
 <template>
   <div>
     <h1>Live Map</h1>
+    <p class="map-stats" style="margin: 0 0 0.35rem; font-size: 0.95rem;">
+      <strong>Drivers (map API):</strong> {{ mapApiDriverCount }}
+      · <strong>Markers plotted:</strong> {{ mapMarkersPlotted }}
+      · <strong>Online + live</strong> <span class="muted" style="font-size: 0.8rem;">(is_active &amp; live_location_active)</span>:
+      {{ mapOnlineLiveCount }}
+      · <strong>Requests (map API):</strong> {{ mapRequestsApiCount }}
+      · <strong>Request markers:</strong> {{ mapRequestMarkersPlotted }}
+    </p>
+    <p v-if="!adminProfilesLoaded" class="muted" style="margin: 0 0 0.5rem; font-size: 0.82rem;">
+      Profile data (name / phone / plate) requires <code style="font-size: inherit;">GET /admin/drivers</code> — last fetch failed; markers still show map positions.
+    </p>
     <p style="margin-top: -0.25rem; color: #4b5563; font-size: 0.9rem;">
       Auto refresh every {{ pollSeconds }}s
       <span v-if="!useGoogleMaps" style="display: block; margin-top: 0.25rem; font-size: 0.8rem;">
@@ -28,6 +39,10 @@
         <div v-else>
           <p><strong>Type:</strong> {{ selectedItem.type }}</p>
           <p><strong>ID:</strong> {{ selectedItem.id }}</p>
+          <template v-if="selectedItem.type === 'driver'">
+            <p v-if="selectedItem.driver_name"><strong>Name:</strong> {{ selectedItem.driver_name }}</p>
+            <p v-if="selectedItem.plate_number"><strong>Plate:</strong> {{ selectedItem.plate_number }}</p>
+          </template>
           <p><strong>Phone:</strong> {{ selectedItem.phone || 'N/A' }}</p>
 
           <button
@@ -110,6 +125,14 @@ const nearestList = ref([]);
 let pollTimer = null;
 const requestWarning = ref('');
 const driverWarning = ref('');
+/** Counts from GET /admin/map/drivers array length (successful parse), not from row.total. */
+const mapApiDriverCount = ref(0);
+const mapMarkersPlotted = ref(0);
+/** Rows where both numeric flags read as 1 (same rule as green markers when map DTO includes flags). */
+const mapOnlineLiveCount = ref(0);
+const mapRequestsApiCount = ref(0);
+const mapRequestMarkersPlotted = ref(0);
+const adminProfilesLoaded = ref(false);
 let googleInitFitted = false;
 let leafletLocked = false;
 let googleLocked = false;
@@ -117,6 +140,39 @@ let googleLocked = false;
 /** Gin `/admin` group: ListDriversForMap, ListRideRequestsForMap */
 const DRIVER_MAP_PATH = '/admin/map/drivers';
 const REQUEST_MAP_PATH = '/admin/map/ride-requests';
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Fields come from GET /admin/drivers (not the minimal map DTO). */
+function pickAdminDriverName(row) {
+  if (!row || typeof row !== 'object') return '';
+  const app = row.application ?? row.driver_application ?? row.application_data ?? row.app ?? {};
+  let n =
+    row.name ??
+    row.full_name ??
+    row.driver_name ??
+    app.name ??
+    app.full_name ??
+    app.driver_name;
+  if (!phoneStr(n)) {
+    const jr = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
+    const ja = [app.first_name, app.last_name].filter(Boolean).join(' ').trim();
+    n = jr || ja;
+  }
+  return phoneStr(n);
+}
+
+function pickAdminPlate(row) {
+  if (!row || typeof row !== 'object') return '';
+  const app = row.application ?? row.driver_application ?? row.application_data ?? row.app ?? {};
+  return phoneStr(row.plate_number ?? row.plate ?? app.plate_number ?? app.plate ?? app.car_plate);
+}
 
 /**
  * GET /admin/map/drivers contract: `is_active` and `live_location_active` are 0/1 numbers, not booleans.
@@ -577,28 +633,34 @@ function unwrapMapRequestRow(row) {
 }
 
 /**
- * Map feed often omits phones; full `GET /admin/drivers` rows usually include them (see Drivers list).
- * @param {Map<string, string>} phoneByDriverId
+ * Join map row `id` to admin row `driver_id` only (two APIs — do not mix keys blindly).
+ * @param {Map<string, { phone: string, name: string, plate_number: string }>} profileByDriverId
  */
-function normalizeDrivers(raw, phoneByDriverId) {
+function normalizeDrivers(raw, profileByDriverId) {
   const rows = extractDriverRows(raw);
   return rows
     .map((row) => {
       const d = unwrapMapDriverRow(row);
       const ll = pickDriverLatLng(d);
-      /** Map contract: `id` is the driver user id (prefer over driver_id). */
+      /** Map contract: `id` joins to `driver_id` on GET /admin/drivers. */
       const mapId = d.id ?? d.driver_id;
-      let phone = pickDriverPhone(d);
-      if (!phone && phoneByDriverId?.size && mapId != null) {
-        phone = phoneByDriverId.get(String(mapId)) ?? '';
+      const prof = mapId != null && profileByDriverId?.get ? profileByDriverId.get(String(mapId)) : undefined;
+
+      let phone = prof?.phone || '';
+      let driver_name = prof?.name || '';
+      let plate_number = prof?.plate_number || '';
+      if (!phone) phone = pickDriverPhone(d) || '';
+
+      if (import.meta.env.DEV && mapId != null && profileByDriverId?.size && !prof) {
+        console.warn('[Map] join: no GET /admin/drivers profile for map id=', mapId, '(expected driver_id === id)');
       }
-      if (!phone && phoneByDriverId?.size && d.driver_id != null && String(d.driver_id) !== String(mapId)) {
-        phone = phoneByDriverId.get(String(d.driver_id)) ?? phone;
-      }
+
       return {
         ...d,
         driver_id: mapId,
         phone,
+        driver_name,
+        plate_number,
         latlng: ll
       };
     })
@@ -609,21 +671,39 @@ function normalizeDrivers(raw, phoneByDriverId) {
     });
 }
 
-/** @param {unknown} raw response from `GET /admin/drivers` */
-function buildDriverPhoneById(raw) {
+/**
+ * Index admin list by `driver_id` (canonical). Duplicate under `id` only when both differ (rare backends).
+ * @param {unknown} raw response from `GET /admin/drivers`
+ * @returns {Map<string, { phone: string, name: string, plate_number: string }>}
+ */
+function buildDriverProfileByDriverId(raw) {
   const map = new Map();
   const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const d = unwrapMapDriverRow(row);
-    const phone = pickDriverPhone(d);
-    if (!phone) continue;
-    const id = d.id ?? d.driver_id;
-    const did = d.driver_id ?? d.id;
-    if (id != null) map.set(String(id), phone);
-    if (did != null && String(did) !== String(id ?? '')) map.set(String(did), phone);
+    const phone = phoneStr(d.phone) || pickDriverPhone(d) || '';
+    const name = pickAdminDriverName(d);
+    const plate_number = pickAdminPlate(d);
+    const payload = { phone, name, plate_number };
+    if (row.driver_id != null) map.set(String(row.driver_id), payload);
+    if (row.id != null && String(row.id) !== String(row.driver_id ?? '')) {
+      map.set(String(row.id), payload);
+    }
   }
   return map;
+}
+
+function driverMarkerPopupHtml(d) {
+  const id = escapeHtml(d.driver_id ?? 'N/A');
+  const name = (d.driver_name && escapeHtml(d.driver_name)) || '';
+  const plate = (d.plate_number && escapeHtml(d.plate_number)) || '';
+  const phone = escapeHtml(d.phone || '') || 'N/A';
+  const parts = [`<strong>Driver #${id}</strong>`];
+  if (name) parts.push(`Name: ${name}`);
+  if (plate) parts.push(`Plate: ${plate}`);
+  parts.push(`Phone: ${phone}`);
+  return `<div>${parts.join('<br/>')}</div>`;
 }
 
 /**
@@ -687,17 +767,14 @@ function renderMarkersLeaflet(drivers, requests) {
 
   drivers.forEach((d) => {
     const m = L.marker(d.latlng, { icon: markerIconLeaflet(driverStatusColor(d)) });
-    m.bindPopup(`
-      <div>
-        <strong>Driver #${d.driver_id ?? 'N/A'}</strong><br/>
-        Phone: ${d.phone || 'N/A'}
-      </div>
-    `);
+    m.bindPopup(driverMarkerPopupHtml(d));
     m.on('click', () => {
       selectedItem.value = {
         type: 'driver',
         id: d.driver_id ?? 'N/A',
         phone: d.phone,
+        driver_name: d.driver_name,
+        plate_number: d.plate_number,
         latlng: d.latlng,
         raw: d
       };
@@ -749,17 +826,14 @@ function renderMarkersGoogle(drivers, requests) {
       title: `Driver #${d.driver_id ?? 'N/A'}`
     });
     marker.addListener('click', () => {
-      googleInfoWindow.setContent(`
-        <div>
-          <strong>Driver #${d.driver_id ?? 'N/A'}</strong><br/>
-          Phone: ${d.phone || 'N/A'}
-        </div>
-      `);
+      googleInfoWindow.setContent(driverMarkerPopupHtml(d));
       googleInfoWindow.open({ map: googleMap, anchor: marker });
       selectedItem.value = {
         type: 'driver',
         id: d.driver_id ?? 'N/A',
         phone: d.phone,
+        driver_name: d.driver_name,
+        plate_number: d.plate_number,
         latlng: d.latlng,
         raw: d
       };
@@ -833,10 +907,11 @@ async function refreshData() {
       console.log('[Map] /admin/map/drivers count=', mr.length, mr[0] != null ? { sample: mr[0] } : '');
     }
 
-    const phoneByDriverId =
-      settled[1].status === 'fulfilled' ? buildDriverPhoneById(settled[1].value) : new Map();
+    adminProfilesLoaded.value = settled[1].status === 'fulfilled';
+    const profileByDriverId =
+      settled[1].status === 'fulfilled' ? buildDriverProfileByDriverId(settled[1].value) : new Map();
     if (settled[1].status === 'rejected') {
-      console.warn('[Map] GET /admin/drivers (phone enrichment) failed', settled[1].reason);
+      console.warn('[Map] GET /admin/drivers (profile join) failed', settled[1].reason);
     }
 
     const phoneByUserId =
@@ -846,29 +921,55 @@ async function refreshData() {
     }
 
     let requestsRaw = [];
+    let rideRequestsFetchOk = false;
     try {
       console.log('[Map] fetching', `${API_BASE}${REQUEST_MAP_PATH}`);
       requestsRaw = await apiGet(REQUEST_MAP_PATH);
+      rideRequestsFetchOk = true;
       console.log('[Map] success', `${API_BASE}${REQUEST_MAP_PATH}`);
     } catch (e) {
       console.error('[Map] fetch failed', `${API_BASE}${REQUEST_MAP_PATH}`, e);
     }
 
     const driverRows = extractDriverRows(driversRaw);
-    const drivers = normalizeDrivers(driversRaw, phoneByDriverId);
+    mapApiDriverCount.value = driverRows.length;
+    mapOnlineLiveCount.value = driverRows.filter((row) => {
+      const r = unwrapMapDriverRow(row);
+      return intFlagOne(r.is_active) && intFlagOne(r.live_location_active);
+    }).length;
+
+    const requestRows = extractRequestRows(requestsRaw);
+    mapRequestsApiCount.value = rideRequestsFetchOk ? requestRows.length : 0;
+
+    const drivers = normalizeDrivers(driversRaw, profileByDriverId);
     const requests = normalizeRequests(requestsRaw, phoneByUserId);
+    mapMarkersPlotted.value = drivers.length;
+    mapRequestMarkersPlotted.value = requests.length;
     renderMarkers(drivers, requests);
 
     if (!drivers.length) {
       driverWarning.value =
         driverRows.length > 0
-          ? `API returned ${driverRows.length} driver(s) but none have coordinates we can plot. Expected fields like last_lat/last_lng, lat/lng, or nested location.{lat,lng}.`
-          : 'No drivers online.';
+          ? `Map API returned ${driverRows.length} row(s) but none have coordinates to plot (need last_lat / last_lng).`
+          : 'Map API returned an empty driver array (no rows). Request succeeded; backend has nothing to list.';
     }
-    if (!requests.length) {
-      requestWarning.value = 'No active requests.';
+    if (!rideRequestsFetchOk) {
+      mapRequestsApiCount.value = 0;
+      mapRequestMarkersPlotted.value = 0;
+      requestWarning.value = 'GET /admin/map/ride-requests failed — check Network tab. Request markers unchanged or empty.';
+    } else if (!requests.length) {
+      requestWarning.value =
+        requestRows.length > 0
+          ? 'Requests in response but none have pickup coordinates to plot.'
+          : 'No ride requests in map response (empty array).';
     }
   } catch (e) {
+    mapApiDriverCount.value = 0;
+    mapMarkersPlotted.value = 0;
+    mapOnlineLiveCount.value = 0;
+    mapRequestsApiCount.value = 0;
+    mapRequestMarkersPlotted.value = 0;
+    adminProfilesLoaded.value = false;
     console.error(e);
     const msg = e instanceof Error ? e.message : '';
     if (msg === 'Failed to fetch') {
