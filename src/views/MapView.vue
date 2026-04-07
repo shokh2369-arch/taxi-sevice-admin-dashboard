@@ -100,7 +100,7 @@
                   class="button"
                   style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;"
                   :disabled="nearestActionBusyKey === `${selectedItem.id}:${(row?.id ?? row?.driver_id ?? row?.driver_user_id ?? '')}`"
-                  @click="resendRequestToNearestDriver(row)"
+                  @click="sendRequestToNearestDriver(row)"
                 >
                   Send
                 </button>
@@ -1099,7 +1099,40 @@ function nearestDriverId(row) {
   return row?.id ?? row?.driver_id ?? row?.driver_user_id ?? null;
 }
 
-async function resendRequestToNearestDriver(row) {
+async function adminSendRequestOfferToDriver(requestId, driverId) {
+  const rid = encodeURIComponent(String(requestId));
+  const did = encodeURIComponent(String(driverId));
+
+  // Admin “offer/dispatch” endpoints (backend must implement one of these).
+  const attempts = [
+    // query-style
+    { path: `/admin/dispatch?request_id=${rid}&driver_id=${did}`, body: null },
+    { path: `/api/admin/dispatch?request_id=${rid}&driver_id=${did}`, body: null },
+    { path: `/admin/nearest-drivers/offer?request_id=${rid}&driver_id=${did}`, body: null },
+    { path: `/api/admin/nearest-drivers/offer?request_id=${rid}&driver_id=${did}`, body: null },
+
+    // body-style
+    { path: `/admin/dispatch`, body: { request_id: String(requestId), driver_id: String(driverId) } },
+    { path: `/api/admin/dispatch`, body: { request_id: String(requestId), driver_id: String(driverId) } },
+    { path: `/admin/ride-requests/${rid}/offer`, body: { driver_id: String(driverId) } },
+    { path: `/api/admin/ride-requests/${rid}/offer`, body: { driver_id: String(driverId) } }
+  ];
+
+  let lastErr = null;
+  for (const a of attempts) {
+    try {
+      return await apiPostJson(a.path, a.body || undefined);
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      // keep trying other shapes; 404 is expected until backend implements
+      if (String(lastErr.message || '').includes('404')) continue;
+    }
+  }
+  throw lastErr || new Error('No admin dispatch endpoint available');
+}
+
+async function sendRequestToNearestDriver(row) {
+  // Desired semantics: send/offer to the driver; driver may accept or ignore.
   if (selectedItem.value?.type !== 'request') return;
   const requestId = selectedItem.value?.id;
   const driverId = nearestDriverId(row);
@@ -1112,25 +1145,13 @@ async function resendRequestToNearestDriver(row) {
   nearestActionBusyKey.value = busyKey;
   nearestActionStatus.value = '';
   try {
-    /**
-     * Backend: reuse driver flow from admin by sending X-Driver-Id.
-     * POST /driver/accept-request { request_id } as that driver.
-     */
-    const body = { request_id: String(requestId) };
-    const headers = { 'X-Driver-Id': String(driverId) };
-    const res = await apiPostJson('/driver/accept-request', body, headers)
-      .catch(() => apiPostJson('/api/driver/accept-request', body, headers));
-
-    const ok = res?.ok === true || res?.assigned === true;
-    if (ok) {
-      const trip = res?.trip_id ?? res?.tripId ?? '';
-      nearestActionStatus.value = `Order resent to driver #${driverId}${trip ? ` (trip ${trip})` : ''}.`;
-    } else {
-      nearestActionStatus.value = `Sent to driver #${driverId}. Response: ${JSON.stringify(res)}`;
-    }
+    await adminSendRequestOfferToDriver(requestId, driverId);
+    nearestActionStatus.value = `Sent offer to driver #${driverId}. Driver may accept or ignore.`;
   } catch (e) {
     console.error(e);
-    nearestActionStatus.value = e instanceof Error ? e.message : 'Failed to resend order to driver';
+    nearestActionStatus.value =
+      (e instanceof Error ? e.message : 'Failed to send offer') +
+      '\nBackend needs an admin dispatch/offer endpoint (not /driver/accept-request).';
   } finally {
     if (nearestActionBusyKey.value === busyKey) nearestActionBusyKey.value = '';
   }
@@ -1158,6 +1179,7 @@ function nearestRequestId(row) {
 }
 
 async function sendNearestRequestToSelectedDriver(row) {
+  // Same semantics, other direction: selected driver + nearest request.
   if (selectedItem.value?.type !== 'driver') return;
   const driverId = selectedItem.value?.id;
   const requestId = nearestRequestId(row);
@@ -1170,21 +1192,13 @@ async function sendNearestRequestToSelectedDriver(row) {
   nearestActionBusyKey.value = busyKey;
   nearestActionStatus.value = '';
   try {
-    const body = { request_id: String(requestId) };
-    const headers = { 'X-Driver-Id': String(driverId) };
-    const res = await apiPostJson('/driver/accept-request', body, headers)
-      .catch(() => apiPostJson('/api/driver/accept-request', body, headers));
-
-    const ok = res?.ok === true || res?.assigned === true;
-    if (ok) {
-      const trip = res?.trip_id ?? res?.tripId ?? '';
-      nearestActionStatus.value = `Request sent to driver #${driverId}${trip ? ` (trip ${trip})` : ''}.`;
-    } else {
-      nearestActionStatus.value = `Sent to driver #${driverId}. Response: ${JSON.stringify(res)}`;
-    }
+    await adminSendRequestOfferToDriver(requestId, driverId);
+    nearestActionStatus.value = `Sent offer for request ${requestId} to driver #${driverId}.`;
   } catch (e) {
     console.error(e);
-    nearestActionStatus.value = e instanceof Error ? e.message : 'Failed to send request to driver';
+    nearestActionStatus.value =
+      (e instanceof Error ? e.message : 'Failed to send offer') +
+      '\nBackend needs an admin dispatch/offer endpoint (not /driver/accept-request).';
   } finally {
     if (nearestActionBusyKey.value === busyKey) nearestActionBusyKey.value = '';
   }
