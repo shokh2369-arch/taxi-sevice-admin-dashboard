@@ -121,6 +121,7 @@ const DRIVER_LAT_LNG_KEY_PAIRS = [
   ['last_latitude', 'last_longitude'],
   ['current_lat', 'current_lng'],
   ['current_latitude', 'current_longitude'],
+  ['map_lat', 'map_lng'],
   ['latitude', 'longitude'],
   ['lat', 'lng'],
   ['lat', 'lon'],
@@ -293,9 +294,43 @@ function markerIconLeaflet(color) {
   });
 }
 
+/** Map DTOs often omit `online`; rely on coords for “live” unless the payload clearly says offline. */
+function driverExplicitlyOffline(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (d.online === false || d.is_online === false || d.isOnline === false) return true;
+  if (d.offline === true || d.is_offline === true) return true;
+  const st = String(d.status ?? d.driver_status ?? d.state ?? '').toLowerCase();
+  if (['offline', 'off_line', 'inactive', 'unavailable'].includes(st)) return true;
+  return false;
+}
+
+function driverExplicitlyOnline(d) {
+  if (!d || typeof d !== 'object') return false;
+  if (d.online === true || d.is_online === true || d.isOnline === true) return true;
+  if (d.on_duty === true || d.driver_online === true) return true;
+  if (d.active === true || d.is_active === true) return true;
+  const st = String(d.status ?? d.driver_status ?? d.state ?? '').toLowerCase();
+  if (['online', 'on_line', 'working', 'active', 'available', 'busy', 'idle', 'onduty', 'on-duty'].includes(st)) {
+    return true;
+  }
+  if (d.live === true || d.has_live === true || d.has_live_location === true) return true;
+  return false;
+}
+
 function driverStatusColor(d) {
-  const online = Boolean(d.online ?? d.is_online ?? d.active);
-  const hasLive = Boolean(d.live ?? d.has_live ?? (pickDriverLatLng(d) != null));
+  const hasCoords =
+    Array.isArray(d.latlng) &&
+    d.latlng.length >= 2 &&
+    Number.isFinite(d.latlng[0]) &&
+    Number.isFinite(d.latlng[1]);
+
+  if (driverExplicitlyOffline(d)) return '#6b7280';
+  if (hasCoords && (driverExplicitlyOnline(d) || !driverExplicitlyOffline(d))) return '#16a34a';
+
+  const online = driverExplicitlyOnline(d);
+  const hasLive = Boolean(
+    d.live ?? d.has_live ?? d.has_live_location ?? (pickDriverLatLng(d) != null)
+  );
   if (online && hasLive) return '#16a34a';
   if (!online) return '#6b7280';
   return '#dc2626';
@@ -320,7 +355,17 @@ async function firstSuccess(paths) {
 function extractDriverRows(raw) {
   if (Array.isArray(raw)) return raw;
   if (!raw || typeof raw !== 'object') return [];
-  const keys = ['drivers', 'items', 'results', 'rows', 'list', 'data'];
+  const keys = [
+    'drivers',
+    'map_drivers',
+    'active_drivers',
+    'items',
+    'results',
+    'rows',
+    'list',
+    'values',
+    'data'
+  ];
   for (const k of keys) {
     const v = raw[k];
     if (Array.isArray(v)) return v;
@@ -337,7 +382,18 @@ function extractDriverRows(raw) {
 function extractRequestRows(raw) {
   if (Array.isArray(raw)) return raw;
   if (!raw || typeof raw !== 'object') return [];
-  const keys = ['requests', 'ride_requests', 'items', 'results', 'rows', 'list', 'data'];
+  const keys = [
+    'requests',
+    'ride_requests',
+    'map_ride_requests',
+    'active_ride_requests',
+    'items',
+    'results',
+    'rows',
+    'list',
+    'values',
+    'data'
+  ];
   for (const k of keys) {
     const v = raw[k];
     if (Array.isArray(v)) return v;
@@ -351,9 +407,29 @@ function extractRequestRows(raw) {
   return [];
 }
 
+/** Merge nested `driver` blob (common in API wrappers) so coords/phone on either level apply. */
+function unwrapMapDriverRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  const nested = row.driver ?? row.Driver;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    return { ...nested, ...row };
+  }
+  return row;
+}
+
+function unwrapMapRequestRow(row) {
+  if (!row || typeof row !== 'object') return row;
+  const nested = row.ride_request ?? row.request ?? row.Request ?? row.RideRequest;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    return { ...nested, ...row };
+  }
+  return row;
+}
+
 function normalizeDrivers(raw) {
   const rows = extractDriverRows(raw);
-  return rows.map((d) => {
+  return rows.map((row) => {
+    const d = unwrapMapDriverRow(row);
     const ll = pickDriverLatLng(d);
     return {
       ...d,
@@ -366,7 +442,8 @@ function normalizeDrivers(raw) {
 
 function normalizeRequests(raw) {
   const rows = extractRequestRows(raw);
-  return rows.map((r) => {
+  return rows.map((row) => {
+    const r = unwrapMapRequestRow(row);
     const ll = pickRequestLatLng(r);
     return {
       ...r,
