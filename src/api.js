@@ -31,10 +31,29 @@ function normalizeFetchError(err, method, path) {
 export async function apiGet(path) {
   try {
     const res = await fetch(`${API_BASE}${path}`, { credentials: fetchCredentials() });
+    const text = await res.text();
     if (!res.ok) {
-      throw new Error(`GET ${path} failed: ${res.status}`);
+      let detail = '';
+      if (text) {
+        try {
+          const j = JSON.parse(text);
+          if (j && typeof j === 'object') {
+            detail =
+              (typeof j.error === 'string' && j.error) ||
+              (typeof j.message === 'string' && j.message) ||
+              (typeof j.msg === 'string' && j.msg) ||
+              '';
+          }
+        } catch {
+          detail = text.slice(0, 280).trim();
+        }
+      }
+      throw new Error(
+        detail ? `GET ${path} failed: ${res.status} — ${detail}` : `GET ${path} failed: ${res.status}`
+      );
     }
-    return res.json();
+    if (!text) return null;
+    return JSON.parse(text);
   } catch (e) {
     throw normalizeFetchError(e, 'GET', path);
   }

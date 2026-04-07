@@ -95,8 +95,15 @@ let googleInfoWindow = null;
 const googleDriverMarkers = [];
 const googleRequestMarkers = [];
 
-const pollMs = 7000;
+/** Map poll interval (see GET /admin/map/drivers). */
+const pollMs = 10000;
 const pollSeconds = Math.floor(pollMs / 1000);
+
+/**
+ * When true, only plot drivers where `live_location_active` is truthy (1) after coords parse.
+ * Default: show everyone the API returns with valid last_lat/last_lng.
+ */
+const MAP_DRIVERS_ONLINE_POSITION_ONLY = false;
 const error = ref('');
 const selectedItem = ref(null);
 const nearestList = ref([]);
@@ -110,6 +117,20 @@ let googleLocked = false;
 /** Gin `/admin` group: ListDriversForMap, ListRideRequestsForMap */
 const DRIVER_MAP_PATH = '/admin/map/drivers';
 const REQUEST_MAP_PATH = '/admin/map/ride-requests';
+
+/**
+ * GET /admin/map/drivers contract: `is_active` and `live_location_active` are 0/1 numbers, not booleans.
+ * @param {unknown} v
+ */
+function intFlagOne(v) {
+  if (v === true) return true;
+  if (v === false) return false;
+  if (v == null) return false;
+  const n = Number(v);
+  if (Number.isFinite(n)) return n === 1;
+  const s = String(v).trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes';
+}
 
 function num(v) {
   const n = Number(v);
@@ -388,6 +409,7 @@ function markerIconLeaflet(color) {
 /** Offline when the API clearly says so (grey marker). */
 function driverExplicitlyOffline(d) {
   if (!d || typeof d !== 'object') return false;
+  if (d.is_active != null && Number(d.is_active) === 0) return true;
   if (d.online === false || d.is_online === false || d.isOnline === false) return true;
   if (d.offline === true || d.is_offline === true) return true;
   const st = String(d.status ?? d.driver_status ?? d.state ?? '').toLowerCase();
@@ -396,12 +418,12 @@ function driverExplicitlyOffline(d) {
 }
 
 /**
- * Green markers only when the payload explicitly says the driver is online / on duty.
- * We do NOT treat `active`, broad status words, live-location flags, or coordinates alone as “online”.
+ * Legacy / other DTOs: explicit booleans / status (not the map 0/1 fields — those use intFlagOne in driverStatusColor).
  */
 function driverStrictlyOnline(d) {
   if (!d || typeof d !== 'object') return false;
   if (driverExplicitlyOffline(d)) return false;
+  if (d.is_active != null) return intFlagOne(d.is_active);
   if (d.online === true || d.is_online === true || d.isOnline === true) return true;
   if (d.driver_online === true || d.on_duty === true) return true;
   const st = String(d.status ?? d.driver_status ?? d.state ?? '').toLowerCase();
@@ -409,24 +431,52 @@ function driverStrictlyOnline(d) {
   return false;
 }
 
-/** “Live” = sharing a position for the legend (online + live → green). */
-function driverHasLivePosition(d) {
+function driverHasLiveCoordsOnly(d) {
   const hasCoords =
     Array.isArray(d.latlng) &&
     d.latlng.length >= 2 &&
     Number.isFinite(d.latlng[0]) &&
     Number.isFinite(d.latlng[1]);
+  return hasCoords;
+}
+
+/**
+ * “Live” for legend: map contract uses `live_location_active` (0/1). Legacy DTOs use booleans or coords.
+ */
+function driverHasLivePosition(d) {
+  if (d.live_location_active != null) return intFlagOne(d.live_location_active);
   return Boolean(
-    d.live ?? d.has_live ?? d.has_live_location ?? d.sharing_live_location ?? hasCoords
+    d.live ?? d.has_live ?? d.has_live_location ?? d.sharing_live_location ?? driverHasLiveCoordsOnly(d)
   );
 }
 
+/**
+ * Marker colours — GET /admin/map/drivers shape:
+ * - Green: is_active === 1 and live_location_active === 1 (numeric/boolean both accepted).
+ * - Red: is_active === 1 but live_location_active === 0 (active, not sharing live).
+ * - Grey: is_active === 0 or legacy offline / not “online” under other DTOs.
+ */
 function driverStatusColor(d) {
   if (driverExplicitlyOffline(d)) return '#6b7280';
 
+  const hasNumericMapFlags =
+    d &&
+    typeof d === 'object' &&
+    (d.is_active != null || d.live_location_active != null);
+
+  if (hasNumericMapFlags) {
+    const active = d.is_active != null ? intFlagOne(d.is_active) : true;
+    const live =
+      d.live_location_active != null
+        ? intFlagOne(d.live_location_active)
+        : driverHasLiveCoordsOnly(d);
+    if (!active) return '#6b7280';
+    if (live) return '#16a34a';
+    return '#dc2626';
+  }
+
   const online = driverStrictlyOnline(d);
   const hasLive = driverHasLivePosition(d);
-
   if (online && hasLive) return '#16a34a';
   if (online && !hasLive) return '#dc2626';
   return '#6b7280';
@@ -532,21 +582,31 @@ function unwrapMapRequestRow(row) {
  */
 function normalizeDrivers(raw, phoneByDriverId) {
   const rows = extractDriverRows(raw);
-  return rows.map((row) => {
-    const d = unwrapMapDriverRow(row);
-    const ll = pickDriverLatLng(d);
-    const id = d.driver_id ?? d.id;
-    let phone = pickDriverPhone(d);
-    if (!phone && phoneByDriverId?.size && id != null) {
-      phone = phoneByDriverId.get(String(id)) ?? '';
-    }
-    return {
-      ...d,
-      driver_id: id,
-      phone,
-      latlng: ll
-    };
-  }).filter((d) => d.latlng);
+  return rows
+    .map((row) => {
+      const d = unwrapMapDriverRow(row);
+      const ll = pickDriverLatLng(d);
+      /** Map contract: `id` is the driver user id (prefer over driver_id). */
+      const mapId = d.id ?? d.driver_id;
+      let phone = pickDriverPhone(d);
+      if (!phone && phoneByDriverId?.size && mapId != null) {
+        phone = phoneByDriverId.get(String(mapId)) ?? '';
+      }
+      if (!phone && phoneByDriverId?.size && d.driver_id != null && String(d.driver_id) !== String(mapId)) {
+        phone = phoneByDriverId.get(String(d.driver_id)) ?? phone;
+      }
+      return {
+        ...d,
+        driver_id: mapId,
+        phone,
+        latlng: ll
+      };
+    })
+    .filter((d) => {
+      if (!d.latlng) return false;
+      if (!MAP_DRIVERS_ONLINE_POSITION_ONLY) return true;
+      return intFlagOne(d.live_location_active);
+    });
 }
 
 /** @param {unknown} raw response from `GET /admin/drivers` */
@@ -556,10 +616,12 @@ function buildDriverPhoneById(raw) {
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const d = unwrapMapDriverRow(row);
-    const id = d.driver_id ?? d.id;
-    if (id == null) continue;
     const phone = pickDriverPhone(d);
-    if (phone) map.set(String(id), phone);
+    if (!phone) continue;
+    const id = d.id ?? d.driver_id;
+    const did = d.driver_id ?? d.id;
+    if (id != null) map.set(String(id), phone);
+    if (did != null && String(did) !== String(id ?? '')) map.set(String(did), phone);
   }
   return map;
 }
@@ -766,6 +828,10 @@ async function refreshData() {
     if (mapDriversResult.status !== 'fulfilled') throw mapDriversResult.reason;
     const driversRaw = mapDriversResult.value;
     console.log('[Map] success', `${API_BASE}${DRIVER_MAP_PATH}`);
+    if (import.meta.env.DEV) {
+      const mr = extractDriverRows(driversRaw);
+      console.log('[Map] /admin/map/drivers count=', mr.length, mr[0] != null ? { sample: mr[0] } : '');
+    }
 
     const phoneByDriverId =
       settled[1].status === 'fulfilled' ? buildDriverPhoneById(settled[1].value) : new Map();
