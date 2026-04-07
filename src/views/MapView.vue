@@ -784,7 +784,9 @@ function normalizeRequests(raw, riderProfileByKey) {
   return rows.map((row) => {
     const r = unwrapMapRequestRow(row);
     const ll = pickRequestLatLng(r);
-    let phone = pickRiderPhone(r);
+    /** GET /admin/map/ride-requests includes `rider_phone` when the backend provides it. */
+    let phone = phoneStr(r.rider_phone);
+    if (!phone) phone = pickRiderPhone(r);
     let rider_name = '';
     const lookupKeys = collectRiderProfileLookupKeys(r);
     for (const key of lookupKeys) {
@@ -1039,11 +1041,14 @@ async function refreshData() {
 
 async function loadNearestDrivers(item) {
   if (!item?.id) return;
+  const requestId = encodeURIComponent(String(item.id));
   try {
+    /** Backend: GET .../nearest-drivers?request_id=<uuid> → 200 JSON array. */
     const data = await firstSuccess([
+      `/admin/nearest-drivers?request_id=${requestId}`,
+      `/api/admin/nearest-drivers?request_id=${requestId}`,
       `/admin/requests/${item.id}/nearest-drivers`,
-      `/admin/ride-requests/${item.id}/nearest-drivers`,
-      `/admin/nearest-drivers?request_id=${item.id}`
+      `/admin/ride-requests/${item.id}/nearest-drivers`
     ]);
     nearestList.value = Array.isArray(data) ? data : data?.drivers || [];
   } catch (e) {
@@ -1054,10 +1059,12 @@ async function loadNearestDrivers(item) {
 
 async function loadNearestRequests(item) {
   if (!item?.id) return;
+  const driverId = encodeURIComponent(String(item.id));
   try {
     const data = await firstSuccess([
-      `/admin/drivers/${item.id}/nearest-requests`,
-      `/admin/nearest-requests?driver_id=${item.id}`
+      `/admin/nearest-requests?driver_id=${driverId}`,
+      `/api/admin/nearest-requests?driver_id=${driverId}`,
+      `/admin/drivers/${item.id}/nearest-requests`
     ]);
     nearestList.value = Array.isArray(data) ? data : data?.requests || [];
   } catch (e) {
@@ -1068,7 +1075,12 @@ async function loadNearestRequests(item) {
 
 function nearestLabel(row) {
   const id = row.driver_id ?? row.request_id ?? row.id ?? 'N/A';
-  const phone = pickDriverPhone(row) || pickRiderPhone(row) || phoneStr(row.phone) || 'N/A';
+  const phone =
+    pickDriverPhone(row) ||
+    pickRiderPhone(row) ||
+    phoneStr(row.phone) ||
+    (row.telegram_id != null && row.telegram_id !== '' ? `tg:${row.telegram_id}` : '') ||
+    'N/A';
   const dist = row.distance_km ?? row.distance ?? row.km;
   const distText = dist != null ? `, ${dist} km` : '';
   return `#${id} (${phone}${distText})`;

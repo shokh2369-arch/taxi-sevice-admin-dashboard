@@ -1,12 +1,24 @@
-/** Backend API origin (same as /admin/dashboard). Not the static Vercel page URL unless it reverse-proxies /admin. */
-const API_BASE =
+/** Strip trailing slashes so `${API_BASE}/admin/...` never becomes `//admin`. */
+function normalizeApiOrigin(v) {
+  return String(v || '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
+/**
+ * Origin that reaches the Go service (no trailing slash).
+ * If the API lives under `/api`, set e.g. `https://host/api` — paths use `/admin/...` so you get `https://host/api/admin/...`.
+ * Do not set `https://host/api/api` unless that is literally your mount path.
+ */
+const API_BASE = normalizeApiOrigin(
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
-  (typeof process !== 'undefined' && process.env && process.env.VITE_API_BASE_URL) ||
-  (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) ||
-  (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_URL) ||
-  (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) ||
-  'https://taxi-1-kpkh.onrender.com';
+    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
+    (typeof process !== 'undefined' && process.env && process.env.VITE_API_BASE_URL) ||
+    (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) ||
+    (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_URL) ||
+    (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) ||
+    'https://taxi-1-kpkh.onrender.com'
+);
 
 /** `include` if Go CORS uses credentialed requests + cookie/session (matches ADMIN_DASHBOARD_ORIGIN echo). Default `omit`. */
 function fetchCredentials() {
