@@ -17,6 +17,13 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .nav-links a {
@@ -408,6 +415,64 @@ a {
   }
   .map-canvas {
     height: 65vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .navbar {
+    padding: 0.65rem 0.9rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .nav-links {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.75rem;
+    padding-top: 0.25rem;
+  }
+
+  .nav-links a {
+    margin-left: 0;
+    white-space: nowrap;
+    padding: 0.35rem 0.25rem;
+  }
+
+  .container {
+    margin: 0.9rem auto;
+    padding: 0 0.75rem;
+  }
+
+  .filter-row {
+    gap: 0.5rem;
+  }
+
+  .filter-row > * {
+    width: 100%;
+  }
+
+  .input {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .button {
+    min-height: 44px;
+  }
+
+  /* Tables: allow horizontal scroll on phones */
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  .table th,
+  .table td {
+    white-space: nowrap;
   }
 }
 
