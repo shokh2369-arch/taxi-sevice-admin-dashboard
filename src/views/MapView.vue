@@ -115,18 +115,96 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function pickDriverLatLng(row) {
-  const lat = num(row.last_lat);
-  const lng = num(row.last_lng);
-  if (lat == null || lng == null) return null;
-  return [lat, lng];
+/** @type {[string, string][]} */
+const DRIVER_LAT_LNG_KEY_PAIRS = [
+  ['last_lat', 'last_lng'],
+  ['last_latitude', 'last_longitude'],
+  ['current_lat', 'current_lng'],
+  ['current_latitude', 'current_longitude'],
+  ['latitude', 'longitude'],
+  ['lat', 'lng'],
+  ['lat', 'lon'],
+  ['Lat', 'Lng']
+];
+
+/** GeoJSON Point / generic coordinates: [longitude, latitude] */
+function latLngFromCoordinatesArray(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const a = num(coords[0]);
+  const b = num(coords[1]);
+  if (a == null || b == null) return null;
+  return [b, a];
 }
 
+function pickLatLngFromFlatObject(o) {
+  if (!o || typeof o !== 'object') return null;
+  for (const [latKey, lngKey] of DRIVER_LAT_LNG_KEY_PAIRS) {
+    const lat = num(o[latKey]);
+    const lng = num(o[lngKey]);
+    if (lat != null && lng != null) return [lat, lng];
+  }
+  // Reversed pair attempt for Lon/Lat style keys
+  const lat = num(o.Lat ?? o.lat ?? o.latitude ?? o.last_lat ?? o.last_latitude);
+  const lng = num(o.Lng ?? o.lon ?? o.lng ?? o.longitude ?? o.last_lng ?? o.last_longitude);
+  if (lat != null && lng != null) return [lat, lng];
+  if (Array.isArray(o.coordinates)) return latLngFromCoordinatesArray(o.coordinates);
+  const geom = o.geometry;
+  if (geom && Array.isArray(geom.coordinates)) return latLngFromCoordinatesArray(geom.coordinates);
+  return null;
+}
+
+const DRIVER_NESTED_LOCATION_KEYS = [
+  'location',
+  'last_location',
+  'live_location',
+  'telegram_location',
+  'current_location',
+  'position',
+  'geo',
+  'coordinates_obj'
+];
+
+function pickDriverLatLng(row) {
+  const direct = pickLatLngFromFlatObject(row);
+  if (direct) return direct;
+  if (!row || typeof row !== 'object') return null;
+  for (const key of DRIVER_NESTED_LOCATION_KEYS) {
+    const nested = row[key];
+    const ll = pickLatLngFromFlatObject(nested);
+    if (ll) return ll;
+  }
+  return null;
+}
+
+/** @type {[string, string][]} */
+const REQUEST_LAT_LNG_KEY_PAIRS = [
+  ['pickup_lat', 'pickup_lng'],
+  ['pickup_latitude', 'pickup_longitude'],
+  ['from_lat', 'from_lng'],
+  ['latitude', 'longitude'],
+  ['lat', 'lng'],
+  ['lat', 'lon']
+];
+
 function pickRequestLatLng(row) {
-  const lat = num(row.pickup_lat);
-  const lng = num(row.pickup_lng);
-  if (lat == null || lng == null) return null;
-  return [lat, lng];
+  if (!row || typeof row !== 'object') return null;
+  for (const [latKey, lngKey] of REQUEST_LAT_LNG_KEY_PAIRS) {
+    const lat = num(row[latKey]);
+    const lng = num(row[lngKey]);
+    if (lat != null && lng != null) return [lat, lng];
+  }
+  const nested =
+    row.pickup_location ??
+    row.pickup ??
+    row.from ??
+    row.origin ??
+    row.location;
+  const fromNested = pickLatLngFromFlatObject(nested);
+  if (fromNested) return fromNested;
+  if (Array.isArray(row.coordinates)) return latLngFromCoordinatesArray(row.coordinates);
+  const geom = row.geometry;
+  if (geom && Array.isArray(geom.coordinates)) return latLngFromCoordinatesArray(geom.coordinates);
+  return null;
 }
 
 function markerIconLeaflet(color) {
@@ -162,8 +240,42 @@ async function firstSuccess(paths) {
   throw lastErr || new Error('All endpoint attempts failed');
 }
 
+function extractDriverRows(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || typeof raw !== 'object') return [];
+  const keys = ['drivers', 'items', 'results', 'rows', 'list', 'data'];
+  for (const k of keys) {
+    const v = raw[k];
+    if (Array.isArray(v)) return v;
+  }
+  const inner = raw.data;
+  if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+    for (const k of keys) {
+      if (Array.isArray(inner[k])) return inner[k];
+    }
+  }
+  return [];
+}
+
+function extractRequestRows(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || typeof raw !== 'object') return [];
+  const keys = ['requests', 'ride_requests', 'items', 'results', 'rows', 'list', 'data'];
+  for (const k of keys) {
+    const v = raw[k];
+    if (Array.isArray(v)) return v;
+  }
+  const inner = raw.data;
+  if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+    for (const k of keys) {
+      if (Array.isArray(inner[k])) return inner[k];
+    }
+  }
+  return [];
+}
+
 function normalizeDrivers(raw) {
-  const rows = Array.isArray(raw) ? raw : raw?.drivers || [];
+  const rows = extractDriverRows(raw);
   return rows.map((d) => {
     const ll = pickDriverLatLng(d);
     return {
@@ -176,7 +288,7 @@ function normalizeDrivers(raw) {
 }
 
 function normalizeRequests(raw) {
-  const rows = Array.isArray(raw) ? raw : raw?.requests || raw?.ride_requests || [];
+  const rows = extractRequestRows(raw);
   return rows.map((r) => {
     const ll = pickRequestLatLng(r);
     return {
@@ -348,12 +460,16 @@ async function refreshData() {
       console.error('[Map] fetch failed', `${API_BASE}${REQUEST_MAP_PATH}`, e);
     }
 
+    const driverRows = extractDriverRows(driversRaw);
     const drivers = normalizeDrivers(driversRaw);
     const requests = normalizeRequests(requestsRaw);
     renderMarkers(drivers, requests);
 
     if (!drivers.length) {
-      driverWarning.value = 'No drivers online.';
+      driverWarning.value =
+        driverRows.length > 0
+          ? `API returned ${driverRows.length} driver(s) but none have coordinates we can plot. Expected fields like last_lat/last_lng, lat/lng, or nested location.{lat,lng}.`
+          : 'No drivers online.';
     }
     if (!requests.length) {
       requestWarning.value = 'No active requests.';
