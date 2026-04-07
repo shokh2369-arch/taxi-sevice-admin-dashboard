@@ -137,7 +137,11 @@ let googleInitFitted = false;
 let leafletLocked = false;
 let googleLocked = false;
 
-/** Gin `/admin` group: ListDriversForMap, ListRideRequestsForMap */
+/**
+ * Gin `GET /admin/map/drivers` — JSON array of `{ id, last_lat, last_lng, is_active, live_location_active }`.
+ * Backend should return all rows with non-null lat/lng; `id` is `drivers.user_id` (join to `driver_id` on GET /admin/drivers).
+ * Client uses flags for colours / counts, not to infer who was returned from SQL.
+ */
 const DRIVER_MAP_PATH = '/admin/map/drivers';
 const REQUEST_MAP_PATH = '/admin/map/ride-requests';
 
