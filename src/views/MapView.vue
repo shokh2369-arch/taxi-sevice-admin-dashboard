@@ -207,6 +207,83 @@ function pickRequestLatLng(row) {
   return null;
 }
 
+function phoneStr(v) {
+  if (v == null) return '';
+  const s = String(v).trim();
+  return s;
+}
+
+const DRIVER_PHONE_KEYS = [
+  'phone',
+  'driver_phone',
+  'phone_number',
+  'mobile',
+  'cell',
+  'contact_phone',
+  'application_phone',
+  'tel'
+];
+
+const DRIVER_PHONE_PARENT_KEYS = [
+  'application',
+  'driver_application',
+  'application_data',
+  'app',
+  'user',
+  'profile',
+  'driver'
+];
+
+function pickFirstPhoneFromObject(o, keys) {
+  if (!o || typeof o !== 'object') return '';
+  for (const k of keys) {
+    const s = phoneStr(o[k]);
+    if (s) return s;
+  }
+  return '';
+}
+
+/** Aligns with common `/admin/drivers` and map DTO shapes (incl. nested `application`). */
+function pickDriverPhone(d) {
+  const direct = pickFirstPhoneFromObject(d, DRIVER_PHONE_KEYS);
+  if (direct) return direct;
+  if (!d || typeof d !== 'object') return '';
+  for (const parent of DRIVER_PHONE_PARENT_KEYS) {
+    const nested = d[parent];
+    const p = pickFirstPhoneFromObject(nested, DRIVER_PHONE_KEYS);
+    if (p) return p;
+  }
+  return '';
+}
+
+const RIDER_PHONE_KEYS = [
+  'phone',
+  'rider_phone',
+  'passenger_phone',
+  'user_phone',
+  'customer_phone',
+  'client_phone',
+  'phone_number',
+  'mobile',
+  'contact_phone',
+  'pickup_phone',
+  'from_phone'
+];
+
+const RIDER_PHONE_PARENT_KEYS = ['user', 'rider', 'passenger', 'customer', 'client', 'profile'];
+
+function pickRiderPhone(r) {
+  const direct = pickFirstPhoneFromObject(r, RIDER_PHONE_KEYS);
+  if (direct) return direct;
+  if (!r || typeof r !== 'object') return '';
+  for (const parent of RIDER_PHONE_PARENT_KEYS) {
+    const nested = r[parent];
+    const p = pickFirstPhoneFromObject(nested, RIDER_PHONE_KEYS);
+    if (p) return p;
+  }
+  return '';
+}
+
 function markerIconLeaflet(color) {
   return L.divIcon({
     className: '',
@@ -281,7 +358,7 @@ function normalizeDrivers(raw) {
     return {
       ...d,
       driver_id: d.driver_id ?? d.id,
-      phone: d.phone ?? d.driver_phone ?? '',
+      phone: pickDriverPhone(d),
       latlng: ll
     };
   }).filter((d) => d.latlng);
@@ -294,7 +371,7 @@ function normalizeRequests(raw) {
     return {
       ...r,
       request_id: r.request_id ?? r.id ?? r.trip_id,
-      phone: r.phone ?? r.rider_phone ?? '',
+      phone: pickRiderPhone(r),
       latlng: ll
     };
   }).filter((r) => r.latlng);
@@ -516,7 +593,7 @@ async function loadNearestRequests(item) {
 
 function nearestLabel(row) {
   const id = row.driver_id ?? row.request_id ?? row.id ?? 'N/A';
-  const phone = row.phone ?? row.driver_phone ?? row.rider_phone ?? 'N/A';
+  const phone = pickDriverPhone(row) || pickRiderPhone(row) || phoneStr(row.phone) || 'N/A';
   const dist = row.distance_km ?? row.distance ?? row.km;
   const distText = dist != null ? `, ${dist} km` : '';
   return `#${id} (${phone}${distText})`;
