@@ -88,4 +88,44 @@ export async function apiPost(path, body) {
   }
 }
 
+/**
+ * POST JSON and parse JSON response.
+ * Supports extra headers (e.g. X-Driver-Id) for driver-scoped admin actions.
+ */
+export async function apiPostJson(path, body, extraHeaders) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(extraHeaders || {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: fetchCredentials()
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let detail = '';
+      if (text) {
+        try {
+          const j = JSON.parse(text);
+          if (j && typeof j === 'object') {
+            detail =
+              (typeof j.error === 'string' && j.error) ||
+              (typeof j.message === 'string' && j.message) ||
+              (typeof j.msg === 'string' && j.msg) ||
+              '';
+          }
+        } catch {
+          detail = text.slice(0, 280).trim();
+        }
+      }
+      throw new Error(
+        detail ? `POST ${path} failed: ${res.status} — ${detail}` : `POST ${path} failed: ${res.status}`
+      );
+    }
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch (e) {
+    throw normalizeFetchError(e, 'POST', path);
+  }
+}
+
 export { API_BASE };

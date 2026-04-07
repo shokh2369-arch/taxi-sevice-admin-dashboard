@@ -78,9 +78,22 @@
 
           <div v-if="nearestList.length" style="margin-top: 0.5rem;">
             <h4 style="margin: 0 0 0.35rem;">Nearest {{ selectedItem.type === 'driver' ? 'requests' : 'drivers' }}</h4>
+            <p v-if="nearestActionStatus" class="muted" style="margin: 0 0 0.35rem; font-size: 0.82rem; white-space: pre-wrap;">
+              {{ nearestActionStatus }}
+            </p>
             <ul style="margin: 0; padding-left: 1.1rem;">
               <li v-for="(row, idx) in nearestList" :key="idx" style="margin-bottom: 0.25rem;">
-                {{ nearestLabel(row) }}
+                <span>{{ nearestLabel(row) }}</span>
+                <button
+                  v-if="selectedItem.type === 'request'"
+                  type="button"
+                  class="button"
+                  style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.8rem;"
+                  :disabled="nearestActionBusyKey === `${selectedItem.id}:${(row?.id ?? row?.driver_id ?? row?.driver_user_id ?? '')}`"
+                  @click="resendRequestToNearestDriver(row)"
+                >
+                  Resend order
+                </button>
               </li>
             </ul>
           </div>
@@ -98,7 +111,7 @@
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { apiGet, API_BASE } from '../api';
+import { apiGet, apiPostJson, API_BASE } from '../api';
 import { fetchUsersList } from '../api/users.js';
 
 const mapEl = ref(null);
@@ -137,6 +150,8 @@ const mapOnlineLiveCount = ref(0);
 const mapRequestsApiCount = ref(0);
 const mapRequestMarkersPlotted = ref(0);
 const adminProfilesLoaded = ref(false);
+const nearestActionStatus = ref('');
+const nearestActionBusyKey = ref('');
 let googleInitFitted = false;
 let leafletLocked = false;
 let googleLocked = false;
@@ -1041,6 +1056,7 @@ async function refreshData() {
 
 async function loadNearestDrivers(item) {
   if (!item?.id) return;
+  nearestActionStatus.value = '';
   const requestId = encodeURIComponent(String(item.id));
   try {
     /** Backend: GET .../nearest-drivers?request_id=<uuid> → 200 JSON array. */
@@ -1054,6 +1070,47 @@ async function loadNearestDrivers(item) {
   } catch (e) {
     console.error(e);
     error.value = e instanceof Error ? e.message : 'Failed to fetch nearest drivers';
+  }
+}
+
+function nearestDriverId(row) {
+  return row?.id ?? row?.driver_id ?? row?.driver_user_id ?? null;
+}
+
+async function resendRequestToNearestDriver(row) {
+  if (selectedItem.value?.type !== 'request') return;
+  const requestId = selectedItem.value?.id;
+  const driverId = nearestDriverId(row);
+  if (!requestId || driverId == null) {
+    nearestActionStatus.value = 'Missing request_id or driver id.';
+    return;
+  }
+
+  const busyKey = `${requestId}:${driverId}`;
+  nearestActionBusyKey.value = busyKey;
+  nearestActionStatus.value = '';
+  try {
+    /**
+     * Backend: reuse driver flow from admin by sending X-Driver-Id.
+     * POST /driver/accept-request { request_id } as that driver.
+     */
+    const body = { request_id: String(requestId) };
+    const headers = { 'X-Driver-Id': String(driverId) };
+    const res = await apiPostJson('/driver/accept-request', body, headers)
+      .catch(() => apiPostJson('/api/driver/accept-request', body, headers));
+
+    const ok = res?.ok === true || res?.assigned === true;
+    if (ok) {
+      const trip = res?.trip_id ?? res?.tripId ?? '';
+      nearestActionStatus.value = `Order resent to driver #${driverId}${trip ? ` (trip ${trip})` : ''}.`;
+    } else {
+      nearestActionStatus.value = `Sent to driver #${driverId}. Response: ${JSON.stringify(res)}`;
+    }
+  } catch (e) {
+    console.error(e);
+    nearestActionStatus.value = e instanceof Error ? e.message : 'Failed to resend order to driver';
+  } finally {
+    if (nearestActionBusyKey.value === busyKey) nearestActionBusyKey.value = '';
   }
 }
 
