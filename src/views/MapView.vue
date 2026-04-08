@@ -1123,7 +1123,8 @@ async function loadNearestDrivers(item) {
       `/admin/requests/${item.id}/nearest-drivers`,
       `/admin/ride-requests/${item.id}/nearest-drivers`
     ]);
-    nearestList.value = Array.isArray(data) ? data : data?.drivers || [];
+    nearestList.value = extractNearestRows(data, 'drivers');
+    nearestActionStatus.value = nearestList.value.length ? '' : 'No nearest drivers returned.';
   } catch (e) {
     console.error(e);
     nearestActionStatus.value =
@@ -1205,13 +1206,39 @@ async function loadNearestRequests(item) {
       `/v1/admin/nearest-requests?id=${driverId}`,
       `/admin/drivers/${item.id}/nearest-requests`
     ]);
-    nearestList.value = Array.isArray(data) ? data : data?.requests || [];
+    nearestList.value = extractNearestRows(data, 'requests');
+    nearestActionStatus.value = nearestList.value.length ? '' : 'No nearest requests returned.';
   } catch (e) {
     console.error(e);
     nearestActionStatus.value =
       e instanceof Error ? e.message : 'Failed to fetch nearest requests (unknown error)';
     error.value = 'Failed to fetch nearest requests — see details below.';
   }
+}
+
+function extractNearestRows(raw, kind) {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || typeof raw !== 'object') return [];
+
+  const prefer = kind === 'requests' ? ['requests', 'ride_requests'] : ['drivers'];
+  const common = ['items', 'results', 'rows', 'list', 'values', 'data'];
+  const keys = [...prefer, ...common];
+
+  for (const k of keys) {
+    const v = raw[k];
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      for (const kk of keys) {
+        if (Array.isArray(v[kk])) return v[kk];
+      }
+    }
+  }
+
+  // Some APIs return `{ ok: true, ... }` with the array nested in `payload` or similar.
+  const nested = raw.payload ?? raw.response ?? raw.body;
+  if (nested && typeof nested === 'object') return extractNearestRows(nested, kind);
+
+  return [];
 }
 
 function nearestRequestId(row) {
