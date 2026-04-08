@@ -4,6 +4,10 @@ import { apiGet } from '../api.js';
  * Ordered list: canonical Go admin route first, then fallbacks some stacks use.
  */
 const USER_LIST_PATHS = [
+  '/admin/riders',
+  '/api/admin/riders',
+  '/api/v1/admin/riders',
+  '/v1/admin/riders',
   '/admin/users',
   '/api/admin/users',
   '/api/v1/admin/users',
@@ -11,11 +15,7 @@ const USER_LIST_PATHS = [
   '/admin/passengers',
   '/api/admin/passengers',
   '/api/v1/admin/passengers',
-  '/v1/admin/passengers',
-  '/admin/riders',
-  '/api/admin/riders',
-  '/api/v1/admin/riders',
-  '/v1/admin/riders'
+  '/v1/admin/passengers'
 ];
 
 /**
