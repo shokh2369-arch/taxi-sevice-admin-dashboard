@@ -74,7 +74,7 @@
             style="margin-bottom: 0.5rem;"
             @click="loadNearestDrivers(selectedItem)"
           >
-            Fetch nearest drivers
+            Fetch available drivers
           </button>
 
           <button
@@ -83,11 +83,11 @@
             style="margin-bottom: 0.5rem;"
             @click="loadNearestRequests(selectedItem)"
           >
-            Fetch nearest requests
+            Fetch available requests
           </button>
 
           <div v-if="nearestList.length" style="margin-top: 0.5rem;">
-            <h4 style="margin: 0 0 0.35rem;">Nearest {{ selectionIsDriver ? 'requests' : 'drivers' }}</h4>
+            <h4 style="margin: 0 0 0.35rem;">{{ selectionIsDriver ? 'Requests' : 'Drivers' }}</h4>
             <p v-if="nearestActionStatus" class="muted" style="margin: 0 0 0.35rem; font-size: 0.82rem; white-space: pre-wrap;">
               {{ nearestActionStatus }}
             </p>
@@ -1277,9 +1277,7 @@ function nearestLabel(row) {
     phoneStr(row.phone) ||
     (row.telegram_id != null && row.telegram_id !== '' ? `tg:${row.telegram_id}` : '') ||
     'N/A';
-  const dist = row.distance_km ?? row.distance ?? row.km;
-  const distText = dist != null ? `, ${dist} km` : '';
-  return `#${id} (${phone}${distText})`;
+  return `#${id} (${phone})`;
 }
 
 function callNumber(phone) {
