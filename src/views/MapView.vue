@@ -186,6 +186,7 @@ const mapOnlineLiveCount = ref(0);
 const mapRequestsApiCount = ref(0);
 const mapRequestMarkersPlotted = ref(0);
 const adminProfilesLoaded = ref(false);
+const driverProfileByIdRef = ref(new Map());
 const nearestActionStatus = ref('');
 const nearestActionBusyKey = ref('');
 let googleInitFitted = false;
@@ -1026,6 +1027,7 @@ async function refreshData() {
     adminProfilesLoaded.value = settled[1].status === 'fulfilled';
     const profileByDriverId =
       settled[1].status === 'fulfilled' ? buildDriverProfileByDriverId(settled[1].value) : new Map();
+    driverProfileByIdRef.value = profileByDriverId;
     if (settled[1].status === 'rejected') {
       console.warn('[Map] GET /admin/drivers (profile join) failed', settled[1].reason);
     }
@@ -1172,7 +1174,20 @@ async function loadNearestDrivers(item) {
       `/admin/requests/${item.id}/nearest-drivers`,
       `/admin/ride-requests/${item.id}/nearest-drivers`
     ]);
-    nearestList.value = extractNearestRows(data, 'drivers');
+    const rows = extractNearestRows(data, 'drivers');
+    const profMap = driverProfileByIdRef.value;
+    nearestList.value = rows.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const did = row.id ?? row.driver_id ?? row.driver_user_id;
+      const prof = did != null ? profMap?.get?.(String(did)) : undefined;
+      if (!prof) return row;
+      return {
+        ...row,
+        phone: phoneStr(row.phone) || prof.phone || '',
+        driver_name: phoneStr(row.driver_name) || prof.name || '',
+        plate_number: phoneStr(row.plate_number) || prof.plate_number || ''
+      };
+    });
     nearestActionStatus.value = nearestList.value.length ? '' : 'No nearest drivers returned.';
   } catch (e) {
     console.error(e);
@@ -1357,12 +1372,18 @@ async function sendNearestRequestToSelectedDriver(row) {
 
 function nearestLabel(row) {
   const id = row.driver_id ?? row.request_id ?? row.id ?? 'N/A';
-  const phone =
-    pickDriverPhone(row) ||
-    pickRiderPhone(row) ||
-    phoneStr(row.phone) ||
-    (row.telegram_id != null && row.telegram_id !== '' ? `tg:${row.telegram_id}` : '') ||
-    'N/A';
+  const isDriverList = selectionIsRequest.value;
+  let phone = '';
+  if (isDriverList) {
+    phone = phoneStr(row.phone) || pickDriverPhone(row) || '';
+  } else {
+    phone = phoneStr(row.phone) || pickRiderPhone(row) || '';
+  }
+  if (!phone) {
+    const tg = row.telegram_id ?? row.tg_id ?? row.user_telegram_id;
+    if (tg != null && tg !== '') phone = `tg:${tg}`;
+  }
+  if (!phone) phone = 'N/A';
   return `#${id} (${phone})`;
 }
 
