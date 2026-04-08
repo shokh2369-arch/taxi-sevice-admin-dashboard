@@ -1005,7 +1005,12 @@ async function refreshData() {
     console.log('[Map] fetching map + phone enrichment (drivers + users)');
     const settled = await Promise.allSettled([
       apiGet(DRIVER_MAP_PATH),
-      apiGet('/admin/drivers'),
+      firstSuccess([
+        '/admin/drivers',
+        '/api/admin/drivers',
+        '/api/v1/admin/drivers',
+        '/v1/admin/drivers'
+      ]),
       fetchUsersList()
     ]);
 
