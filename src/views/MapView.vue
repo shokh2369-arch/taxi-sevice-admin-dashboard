@@ -1099,6 +1099,8 @@ async function loadNearestDrivers(item) {
     const data = await firstSuccess([
       `/admin/nearest-drivers?request_id=${requestId}`,
       `/api/admin/nearest-drivers?request_id=${requestId}`,
+      `/api/v1/admin/nearest-drivers?request_id=${requestId}`,
+      `/v1/admin/nearest-drivers?request_id=${requestId}`,
       `/admin/requests/${item.id}/nearest-drivers`,
       `/admin/ride-requests/${item.id}/nearest-drivers`
     ]);
@@ -1169,6 +1171,8 @@ async function loadNearestRequests(item) {
     const data = await firstSuccess([
       `/admin/nearest-requests?driver_id=${driverId}`,
       `/api/admin/nearest-requests?driver_id=${driverId}`,
+      `/api/v1/admin/nearest-requests?driver_id=${driverId}`,
+      `/v1/admin/nearest-requests?driver_id=${driverId}`,
       `/admin/drivers/${item.id}/nearest-requests`
     ]);
     nearestList.value = Array.isArray(data) ? data : data?.requests || [];
