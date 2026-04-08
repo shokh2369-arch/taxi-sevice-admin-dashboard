@@ -598,7 +598,7 @@ function driverStatusColor(d) {
 }
 
 async function firstSuccess(paths) {
-  let lastErr = null;
+  const errs = [];
   for (const p of paths) {
     try {
       console.log('[Map] fetching', `${API_BASE}${p}`);
@@ -607,10 +607,11 @@ async function firstSuccess(paths) {
       return data;
     } catch (e) {
       console.error('[Map] fetch failed', `${API_BASE}${p}`, e);
-      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      errs.push(`GET ${p} → ${msg}`);
     }
   }
-  throw lastErr || new Error('All endpoint attempts failed');
+  throw new Error(`All endpoint attempts failed.\n${errs.map((x) => `- ${x}`).join('\n')}`);
 }
 
 function extractDriverRows(raw) {
@@ -1093,21 +1094,36 @@ async function refreshData() {
 async function loadNearestDrivers(item) {
   if (!item?.id) return;
   nearestActionStatus.value = '';
+  nearestList.value = [];
   const requestId = encodeURIComponent(String(item.id));
   try {
     /** Backend: GET .../nearest-drivers?request_id=<uuid> → 200 JSON array. */
     const data = await firstSuccess([
       `/admin/nearest-drivers?request_id=${requestId}`,
+      `/admin/nearest-drivers?ride_request_id=${requestId}`,
+      `/admin/nearest-drivers?requestId=${requestId}`,
+      `/admin/nearest-drivers?id=${requestId}`,
       `/api/admin/nearest-drivers?request_id=${requestId}`,
+      `/api/admin/nearest-drivers?ride_request_id=${requestId}`,
+      `/api/admin/nearest-drivers?requestId=${requestId}`,
+      `/api/admin/nearest-drivers?id=${requestId}`,
       `/api/v1/admin/nearest-drivers?request_id=${requestId}`,
+      `/api/v1/admin/nearest-drivers?ride_request_id=${requestId}`,
+      `/api/v1/admin/nearest-drivers?requestId=${requestId}`,
+      `/api/v1/admin/nearest-drivers?id=${requestId}`,
       `/v1/admin/nearest-drivers?request_id=${requestId}`,
+      `/v1/admin/nearest-drivers?ride_request_id=${requestId}`,
+      `/v1/admin/nearest-drivers?requestId=${requestId}`,
+      `/v1/admin/nearest-drivers?id=${requestId}`,
       `/admin/requests/${item.id}/nearest-drivers`,
       `/admin/ride-requests/${item.id}/nearest-drivers`
     ]);
     nearestList.value = Array.isArray(data) ? data : data?.drivers || [];
   } catch (e) {
     console.error(e);
-    error.value = e instanceof Error ? e.message : 'Failed to fetch nearest drivers';
+    nearestActionStatus.value =
+      e instanceof Error ? e.message : 'Failed to fetch nearest drivers (unknown error)';
+    error.value = 'Failed to fetch nearest drivers — see details below.';
   }
 }
 
@@ -1166,19 +1182,30 @@ async function sendRequestToNearestDriver(row) {
 async function loadNearestRequests(item) {
   if (!item?.id) return;
   nearestActionStatus.value = '';
+  nearestList.value = [];
   const driverId = encodeURIComponent(String(item.id));
   try {
     const data = await firstSuccess([
       `/admin/nearest-requests?driver_id=${driverId}`,
+      `/admin/nearest-requests?driverId=${driverId}`,
+      `/admin/nearest-requests?id=${driverId}`,
       `/api/admin/nearest-requests?driver_id=${driverId}`,
+      `/api/admin/nearest-requests?driverId=${driverId}`,
+      `/api/admin/nearest-requests?id=${driverId}`,
       `/api/v1/admin/nearest-requests?driver_id=${driverId}`,
+      `/api/v1/admin/nearest-requests?driverId=${driverId}`,
+      `/api/v1/admin/nearest-requests?id=${driverId}`,
       `/v1/admin/nearest-requests?driver_id=${driverId}`,
+      `/v1/admin/nearest-requests?driverId=${driverId}`,
+      `/v1/admin/nearest-requests?id=${driverId}`,
       `/admin/drivers/${item.id}/nearest-requests`
     ]);
     nearestList.value = Array.isArray(data) ? data : data?.requests || [];
   } catch (e) {
     console.error(e);
-    error.value = e instanceof Error ? e.message : 'Failed to fetch nearest requests';
+    nearestActionStatus.value =
+      e instanceof Error ? e.message : 'Failed to fetch nearest requests (unknown error)';
+    error.value = 'Failed to fetch nearest requests — see details below.';
   }
 }
 
