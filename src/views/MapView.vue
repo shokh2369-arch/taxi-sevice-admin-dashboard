@@ -155,7 +155,7 @@ const pollSeconds = Math.floor(pollMs / 1000);
  * When true, only plot drivers where `live_location_active` is truthy (1) after coords parse.
  * Default: show everyone the API returns with valid last_lat/last_lng.
  */
-const MAP_DRIVERS_ONLINE_POSITION_ONLY = true;
+const MAP_DRIVERS_ONLINE_POSITION_ONLY = false;
 const error = ref('');
 const selectedItem = ref(null);
 const nearestList = ref([]);
