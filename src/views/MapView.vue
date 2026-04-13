@@ -86,8 +86,8 @@
             Fetch available requests
           </button>
 
-          <div v-if="nearestList.length" style="margin-top: 0.5rem;">
-            <h4 style="margin: 0 0 0.35rem;">{{ selectionIsDriver ? 'Requests' : 'Drivers' }}</h4>
+          <div v-if="nearestList.length || nearestActionStatus" style="margin-top: 0.5rem;">
+            <h4 v-if="nearestList.length" style="margin: 0 0 0.35rem;">{{ selectionIsDriver ? 'Requests' : 'Drivers' }}</h4>
             <p v-if="nearestActionStatus" class="muted" style="margin: 0 0 0.35rem; font-size: 0.82rem; white-space: pre-wrap;">
               {{ nearestActionStatus }}
             </p>
@@ -812,7 +812,15 @@ function collectRiderProfileLookupKeys(r) {
  */
 function buildRiderProfileLookup(raw) {
   const map = new Map();
-  const rows = Array.isArray(raw) ? raw : raw?.users || raw?.items || [];
+  const rows = Array.isArray(raw)
+    ? raw
+    : raw?.users ||
+      raw?.items ||
+      raw?.riders ||
+      raw?.passengers ||
+      raw?.customers ||
+      (Array.isArray(raw?.data) ? raw.data : []) ||
+      [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     let phone = pickRiderPhone(row) || phoneStr(row.phone) || '';
