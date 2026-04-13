@@ -615,6 +615,30 @@ async function firstSuccess(paths) {
   throw new Error(`All endpoint attempts failed.\n${errs.map((x) => `- ${x}`).join('\n')}`);
 }
 
+async function firstSuccessNonEmptyNearest(paths, kind) {
+  const errs = [];
+  for (const p of paths) {
+    try {
+      console.log('[Map] fetching', `${API_BASE}${p}`);
+      const data = await apiGet(p);
+      const rows = extractNearestRows(data, kind);
+      console.log('[Map] success', `${API_BASE}${p}`, Array.isArray(rows) ? { rows: rows.length } : '');
+      // Important: some backends return 200 + [] when radius is too small.
+      // Keep trying other variants (e.g. with radius_km) until we get a non-empty list.
+      if (Array.isArray(rows) && rows.length === 0) {
+        errs.push(`GET ${p} → 200 but empty list`);
+        continue;
+      }
+      return data;
+    } catch (e) {
+      console.error('[Map] fetch failed', `${API_BASE}${p}`, e);
+      const msg = e instanceof Error ? e.message : String(e);
+      errs.push(`GET ${p} → ${msg}`);
+    }
+  }
+  throw new Error(`All endpoint attempts returned empty or failed.\n${errs.map((x) => `- ${x}`).join('\n')}`);
+}
+
 function extractDriverRows(raw) {
   if (Array.isArray(raw)) return raw;
   if (!raw || typeof raw !== 'object') return [];
@@ -1114,7 +1138,10 @@ async function loadNearestDrivers(item) {
   try {
     /** Backend: GET .../nearest-drivers?request_id=<uuid> → 200 JSON array. */
     const R = 100000; // large radius so distance doesn't matter (backend may default to 3km otherwise)
-    const data = await firstSuccess([
+    const data = await firstSuccessNonEmptyNearest([
+      `/admin/nearest-drivers?request_id=${requestId}&radius_km=${R}`,
+      `/admin/nearest-drivers?request_id=${requestId}&max_distance_km=${R}`,
+      `/admin/nearest-drivers?request_id=${requestId}&radius=${R}`,
       `/admin/nearest-drivers?request_id=${requestId}`,
       `/admin/nearest-drivers?request_id=${requestId}&radius_km=${R}`,
       `/admin/nearest-drivers?request_id=${requestId}&max_distance_km=${R}`,
@@ -1181,7 +1208,7 @@ async function loadNearestDrivers(item) {
       `/v1/admin/nearest-drivers?id=${requestId}&radius=${R}`,
       `/admin/requests/${item.id}/nearest-drivers`,
       `/admin/ride-requests/${item.id}/nearest-drivers`
-    ]);
+    ], 'drivers');
     const rows = extractNearestRows(data, 'drivers');
     const profMap = driverProfileByIdRef.value;
     nearestList.value = rows.map((row) => {
@@ -1264,7 +1291,10 @@ async function loadNearestRequests(item) {
   const driverId = encodeURIComponent(String(item.id));
   try {
     const R = 100000;
-    const data = await firstSuccess([
+    const data = await firstSuccessNonEmptyNearest([
+      `/admin/nearest-requests?driver_id=${driverId}&radius_km=${R}`,
+      `/admin/nearest-requests?driver_id=${driverId}&max_distance_km=${R}`,
+      `/admin/nearest-requests?driver_id=${driverId}&radius=${R}`,
       `/admin/nearest-requests?driver_id=${driverId}`,
       `/admin/nearest-requests?driver_id=${driverId}&radius_km=${R}`,
       `/admin/nearest-requests?driver_id=${driverId}&max_distance_km=${R}`,
@@ -1314,7 +1344,7 @@ async function loadNearestRequests(item) {
       `/v1/admin/nearest-requests?id=${driverId}&max_distance_km=${R}`,
       `/v1/admin/nearest-requests?id=${driverId}&radius=${R}`,
       `/admin/drivers/${item.id}/nearest-requests`
-    ]);
+    ], 'requests');
     nearestList.value = extractNearestRows(data, 'requests');
     nearestActionStatus.value = nearestList.value.length ? '' : 'No nearest requests returned.';
   } catch (e) {
