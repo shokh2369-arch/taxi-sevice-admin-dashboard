@@ -399,7 +399,12 @@ const DRIVER_PHONE_PARENT_KEYS = [
 const RIDER_PHONE_KEYS = [
   'phone',
   'rider_phone',
+  'riderPhone',
+  'RiderPhone',
+  'rider_phone_number',
+  'riderPhoneNumber',
   'passenger_phone',
+  'passengerPhone',
   'user_phone',
   'customer_phone',
   'client_phone',
@@ -870,9 +875,9 @@ function normalizeRequests(raw, riderProfileByKey) {
     const r = unwrapMapRequestRow(row);
     const ll = pickRequestLatLng(r);
     /** GET /admin/map/ride-requests includes `rider_phone` when the backend provides it. */
-    let phone = phoneStr(r.rider_phone);
+    let phone = pickFirstPhoneFromObject(r, ['rider_phone', 'riderPhone', 'RiderPhone', 'phone']);
     if (!phone) phone = pickRiderPhone(r);
-    let rider_name = '';
+    let rider_name = phoneStr(r.rider_name ?? r.riderName ?? r.client_name ?? r.passenger_name ?? '');
     const lookupKeys = collectRiderProfileLookupKeys(r);
     for (const key of lookupKeys) {
       const p = riderProfileByKey?.get(key);
